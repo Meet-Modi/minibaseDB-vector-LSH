@@ -33,6 +33,10 @@ public class CondExpr
     public Operand operand2;
 
     /**
+     * distance between two operands for vectors
+      */
+    public int distance;
+    /**
      * Pointer to the next element in linked list
      */
     public CondExpr next;
@@ -42,13 +46,11 @@ public class CondExpr
      */
     public CondExpr()
     {
-
         operand1 = new Operand();
         operand2 = new Operand();
-
         operand1.integer = 0;
         operand2.integer = 0;
-
+        distance = 0;
         next = null;
     }
 }

@@ -1,5 +1,5 @@
 package iterator;
-
+import global.*;
 
 public class Operand
 {
@@ -7,4 +7,5 @@ public class Operand
     public String string;
     public int integer;
     public float real;
+    public Vector100Dtype vector100D;
 }

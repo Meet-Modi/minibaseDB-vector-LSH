@@ -43,6 +43,8 @@ public class TupleUtils
         int t1_i, t2_i;
         float t1_r, t2_r;
         String t1_s, t2_s;
+        Vector100Dtype t1_v, t2_v;
+        int vector_distance;
 
         switch (fldType.attrType)
         {
@@ -88,7 +90,25 @@ public class TupleUtils
                 // Now handle the special case that is posed by the max_values for strings...
                 if (t1_s.compareTo(t2_s) > 0) return 1;
                 if (t1_s.compareTo(t2_s) < 0) return -1;
-                return 0;
+
+            case AttrType.attrVector100D:
+                try
+                {
+                    t1_v = t1.get100DVectFld(t1_fld_no);
+                    t2_v = t2.get100DVectFld(t2_fld_no);
+                    vector_distance = t1_v.get_distance(t2_v);
+                    return vector_distance;
+                }
+                catch(FieldNumberOutOfBoundException e)
+                {
+                    throw new TupleUtilsException(e, "FieldNumberOutOfBoundException is caught by TupleUtils.java");
+                }
+                // ****************** VERIFY ***************************
+                // not sure if these are the correct return values. Because instructions say
+                // return the integer distance between the two inputs.
+
+
+
             default:
 
                 throw new UnknowAttrType(null, "Don't know how to handle attrSymbol, attrNull");
