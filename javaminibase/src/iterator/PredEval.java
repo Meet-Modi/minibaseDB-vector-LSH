@@ -43,6 +43,7 @@ public class PredEval
 
         AttrType comparison_type = new AttrType(AttrType.attrInteger);
         int comp_res;
+        int condition_distance, vector_distance;
         boolean op_res = false, row_res = false, col_res = true;
 
         if (p == null)
@@ -91,6 +92,10 @@ public class PredEval
                             comparison_type.attrType = in2[fld1 - 1].attrType;
                         }
                         break;
+                    case AttrType.attrVector100D:
+                        value.set100DVectFld(1, temp_ptr.operand1.vector100D);
+                        tuple1 = value;
+                        comparison_type.attrType = AttrType.attrVector100D;
                     default:
                         break;
                 }
@@ -123,6 +128,10 @@ public class PredEval
                         else
                             tuple2 = t2;
                         break;
+                    case AttrType.attrVector100D:
+                        value.set100DVectFld(1, temp_ptr.operand2.vector100D);
+                        tuple2 = value;
+                        comparison_type.attrType = AttrType.attrVector100D;
                     default:
                         break;
                 }
@@ -131,7 +140,15 @@ public class PredEval
                 // Got the arguments, now perform a comparison.
                 try
                 {
-                    comp_res = TupleUtils.CompareTupleWithTuple(comparison_type, tuple1, fld1, tuple2, fld2);
+                    // We want to reuse the code below in the switch statement for comparisions.
+                    // Goal conditionals:
+                    // vector_distance >= condition_distance ----> aopGE = true implied by vector_distance - condition_distance >= 0
+                    // vector_distance == condition_distance ----> aopEq = true implied by vector_distance - condition_distance == 0
+                    // similar logic for the rest of the comparisions.
+
+                    vector_distance = TupleUtils.CompareTupleWithTuple(comparison_type, tuple1, fld1, tuple2, fld2);
+                    condition_distance = temp_ptr.getDistance();
+                    comp_res = vector_distance - condition_distance;
                 }
                 catch (TupleUtilsException e)
                 {

@@ -53,5 +53,26 @@ public class CondExpr
         distance = 0;
         next = null;
     }
+    public CondExpr(int dist)
+    {
+        operand1 = new Operand();
+        operand2 = new Operand();
+        operand1.integer = 0;
+        operand2.integer = 0;
+        distance = dist;
+        next = null;
+    }
+
+    // used to set the distance parameter of CondExpr if both operands are 100DVectors
+    public void setDistance(int distance)
+    {
+        this.distance = distance;
+    }
+
+    public int getDistance()
+    {
+        return distance;
+    }
+
 }
 
