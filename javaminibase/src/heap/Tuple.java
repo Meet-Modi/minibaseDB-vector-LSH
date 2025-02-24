@@ -430,6 +430,10 @@ public class Tuple implements GlobalConst
                     strCount++;
                     break;
 
+                case AttrType.attrVector100D:
+                    incr = (short)(100 * 2);
+                    break;
+
                 default:
                     throw new InvalidTypeException(null, "TUPLE: TUPLE_TYPE_ERROR");
             }
