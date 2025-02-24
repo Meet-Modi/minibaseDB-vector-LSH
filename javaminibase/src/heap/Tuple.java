@@ -457,6 +457,10 @@ public class Tuple implements GlobalConst
                 incr = (short) (strSizes[strCount] + 2);  //strlen in bytes = strlen +2
                 break;
 
+            case AttrType.attrVector100D:
+                incr = (short)(100 * 2);
+                break;
+
             default:
                 throw new InvalidTypeException(null, "TUPLE: TUPLE_TYPE_ERROR");
         }
@@ -511,6 +515,7 @@ public class Tuple implements GlobalConst
         int i, val;
         float fval;
         String sval;
+        Vector100Dtype temp;
 
         System.out.print("[");
         for (i = 0; i < fldCnt - 1; i++)
@@ -532,6 +537,15 @@ public class Tuple implements GlobalConst
                     sval = Convert.getStrValue(fldOffset[i], data, fldOffset[i + 1] - fldOffset[i]);
                     System.out.print(sval);
                     break;
+
+                case AttrType.attrVector100D:
+                    temp = Convert.get100DVectorValue(fldOffset[i], data);
+                    sval = "";
+                    for (i = 0; i < temp.vector.length; i++)
+                    {
+                        sval = temp.vector[i] + "";
+                    }
+                    System.out.print(sval);
 
                 case AttrType.attrNull:
                 case AttrType.attrSymbol:

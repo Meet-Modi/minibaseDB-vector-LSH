@@ -172,10 +172,11 @@ public class Convert
         instr = new DataInputStream(in);
         value = new Vector100Dtype();
 
-        // read shorts into the 100Dvector
+        // read shorts from the 100Dvector
         for (int i = 0; i < 100; i++)
         {
             value.vector[i] = instr.readShort();
+
         }
         return value;
 
