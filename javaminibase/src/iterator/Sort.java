@@ -46,6 +46,10 @@ public class Sort extends Iterator implements GlobalConst
     private PageId[] bufs_pids;
     private boolean useBM = true; // flag for whether to use buffer manager
 
+    // fields to handle vector100d sorts
+    private Vector100Dtype Target;
+    private int k;
+
     /**
      * Set up for merging the runs.
      * Open an input buffer for each run, and insert the first element (min)
@@ -152,18 +156,53 @@ public class Sort extends Iterator implements GlobalConst
     {
         Tuple tuple;
         pnode cur_node;
-        pnodeSplayPQ Q1 = new pnodeSplayPQ(_sort_fld, sortFldType, order);
-        pnodeSplayPQ Q2 = new pnodeSplayPQ(_sort_fld, sortFldType, order);
-        pnodeSplayPQ pcurr_Q = Q1;
-        pnodeSplayPQ pother_Q = Q2;
-        Tuple lastElem = new Tuple(tuple_size);  // need tuple.java
+
+        // define last Elem and set it to the target tuple. Since distance from target to itself is 0.
+        Tuple lastElem = new Tuple(tuple_size);
+        try
+        {
+            MIN_VAL(lastElem, sortFldType);
+        }
+        catch (UnknowAttrType e)
+        {
+            throw new SortException(e, "Sort.java: UnknowAttrType caught from MIN_VAL()");
+        }
+        catch (Exception e)
+        {
+            throw new SortException(e, "MIN_VAL failed");
+        }
         try
         {
             lastElem.setHdr(n_cols, _in, str_lens);
         }
+
         catch (Exception e)
         {
             throw new SortException(e, "Sort.java: setHdr() failed");
+        }
+
+
+        // define the target_pnode to be able to reuse the heap datastructures.
+        // now our heaps will always have the same root. Need to unsure the root doesn't change.
+
+        pnode target_node = new pnode();
+        target_node.tuple = lastElem;
+
+        pnodeSplayPQ pcurr_Q = null;
+        pnodeSplayPQ pother_Q = null;
+        if (sortFldType.attrType != AttrType.attrVector100D)
+        {
+            pnodeSplayPQ Q1 = new pnodeSplayPQ(_sort_fld, sortFldType, order);
+            pnodeSplayPQ Q2 = new pnodeSplayPQ(_sort_fld, sortFldType, order);
+            pcurr_Q = Q1;
+            pother_Q = Q2;
+        }
+        else
+        {
+            pnodeSplayPQ Q1 = new pnodeSplayPQ(_sort_fld, sortFldType, order, target_node);
+            pnodeSplayPQ Q2 = new pnodeSplayPQ(_sort_fld, sortFldType, order, target_node);
+            pcurr_Q = Q1;
+            pother_Q = Q2;
         }
 
         int run_num = 0;  // keeps track of the number of runs
@@ -177,34 +216,41 @@ public class Sort extends Iterator implements GlobalConst
         int comp_res;
 
         // set the lastElem to be the minimum value for the sort field
-        if (order.tupleOrder == TupleOrder.Ascending)
+        // for vector search, we only care about Ascending.
+        // the min value for vector sort will be the target vector itself.
+        // since it is at distance 0 from itself.
+        if (sortFldType.attrType!=AttrType.attrVector100D)
         {
-            try
+            if (order.tupleOrder == TupleOrder.Ascending)
             {
-                MIN_VAL(lastElem, sortFldType);
+                try
+                {
+                    MIN_VAL(lastElem, sortFldType);
+                }
+                catch (UnknowAttrType e)
+                {
+                    throw new SortException(e, "Sort.java: UnknowAttrType caught from MIN_VAL()");
+                }
+                catch (Exception e)
+                {
+                    throw new SortException(e, "MIN_VAL failed");
+                }
             }
-            catch (UnknowAttrType e)
+            else
             {
-                throw new SortException(e, "Sort.java: UnknowAttrType caught from MIN_VAL()");
-            }
-            catch (Exception e)
-            {
-                throw new SortException(e, "MIN_VAL failed");
-            }
-        }
-        else
-        {
-            try
-            {
-                MAX_VAL(lastElem, sortFldType);
-            }
-            catch (UnknowAttrType e)
-            {
-                throw new SortException(e, "Sort.java: UnknowAttrType caught from MAX_VAL()");
-            }
-            catch (Exception e)
-            {
-                throw new SortException(e, "MIN_VAL failed");
+                // if in vector sort, we come here, then we fucked.
+                try
+                {
+                    MAX_VAL(lastElem, sortFldType);
+                }
+                catch (UnknowAttrType e)
+                {
+                    throw new SortException(e, "Sort.java: UnknowAttrType caught from MAX_VAL()");
+                }
+                catch (Exception e)
+                {
+                    throw new SortException(e, "MIN_VAL failed");
+                }
             }
         }
 
@@ -220,14 +266,17 @@ public class Sort extends Iterator implements GlobalConst
                 e.printStackTrace();
                 throw new SortException(e, "Sort.java: get_next() failed");
             }
-
             if (tuple == null)
             {
                 break;
             }
+
+            // If we get the next element and its not null.
+
             cur_node = new pnode();
             cur_node.tuple = new Tuple(tuple); // tuple copy needed --  Bingjie 4/29/98
 
+            // enqueue current node. This probably needs to be modded.
             pcurr_Q.enq(cur_node);
             p_elems_curr_Q++;
         }
@@ -585,6 +634,9 @@ public class Sort extends Iterator implements GlobalConst
                 //      lastElem.setHdr(fld_no, junk, s_size);
                 lastElem.setStrFld(_sort_fld, s);
                 break;
+            case AttrType.attrVector100D:
+                lastElem.set100DVectFld(_sort_fld, Target);
+                break;
             default:
                 // don't know how to handle attrSymbol, attrNull
                 //System.err.println("error in sort.java");
@@ -651,6 +703,8 @@ public class Sort extends Iterator implements GlobalConst
      * @param sort_order     the sorting order (ASCENDING, DESCENDING)
      * @param sort_field_len the length of the sort field
      * @param n_pages        amount of memory (in pages) available for sorting
+     * @param Target         Vector100Dtype that we want to sort all the tuples against by closest distance
+     * @param k              the number of outputs we need to maintain and return after sorting. If k = 0 we sort all tuples wrt dist from target.
      * @throws IOException   from lower layers
      * @throws SortException something went wrong in the lower layer.
      */
@@ -661,7 +715,9 @@ public class Sort extends Iterator implements GlobalConst
                 int sort_fld,
                 TupleOrder sort_order,
                 int sort_fld_len,
-                int n_pages
+                int n_pages,
+                Vector100Dtype Target,
+                int k
     ) throws IOException, SortException
     {
         _in = new AttrType[len_in];
