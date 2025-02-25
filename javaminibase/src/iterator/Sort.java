@@ -779,7 +779,7 @@ public class Sort extends Iterator implements GlobalConst
         }
         else
         {
-            for (int k = 0; k < _n_pages; k++) bufs[k] = new byte[MAX_SPACE];
+            for (int j = 0; j < _n_pages; k++) bufs[j] = new byte[MAX_SPACE];
         }
 
         first_time = true;
