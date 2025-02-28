@@ -12,12 +12,14 @@ import heap.Heapfile;
 import heap.InvalidTypeException;
 import heap.Tuple;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class LSHFIndex {
     private HashKey hashKey;
-    private Map<Integer, Heapfile> heapFiles;
+    private Map<Integer, Map<Integer, Heapfile>> heapFiles;
 
     public LSHFIndex(int L, int x) {
         this.hashKey = new HashKey(L, x);
@@ -32,12 +34,18 @@ public class LSHFIndex {
             HFDiskMgrException,
             Exception {
         int[] hashValues = hashKey.generateHashValues(vector);
-        for (int i = 0; i < hashValues.length; i++) {
-            int hashValue = hashValues[i];
-            Heapfile heapFile = heapFiles.get(hashValue);
+        for (int layer = 0; layer < hashValues.length; layer++) {
+            int hashValue = hashValues[layer];
+            Map<Integer, Heapfile> layerMap = heapFiles.get(layer);
+            if (layerMap == null) {
+                layerMap = new HashMap<>();
+                heapFiles.put(layer, layerMap);
+            }
+            Heapfile heapFile = layerMap.get(hashValue);
             if (heapFile == null) {
-                heapFile = new Heapfile(null); // Create a new heap file with a unique name
-                heapFiles.put(hashValue, heapFile);
+                String heapFileName = "layer-" + layer + "-bin-" + hashValue;
+                heapFile = new Heapfile(heapFileName); // Create a new heap file with a unique name
+                layerMap.put(hashValue, heapFile);
             }
             insertRIDIntoHeapfile(heapFile, rid);
         }
@@ -50,6 +58,23 @@ public class LSHFIndex {
         tuple.setIntFld(1, rid.pageNo.pid);
         tuple.setIntFld(2, rid.slotNo);
         heapFile.insertRecord(tuple.returnTupleByteArray());
+    }
+
+    public List<String> getBins(Vector100Dtype vector) throws IOException, ConstructPageException {
+        int[] hashValues = hashKey.generateHashValues(vector);
+        List<String> binNames = new ArrayList<>();
+        for (int layer = 0; layer < hashValues.length; layer++) {
+            int hashValue = hashValues[layer];
+            Map<Integer, Heapfile> layerMap = heapFiles.get(layer);
+            if (layerMap != null) {
+                Heapfile heapFile = layerMap.get(hashValue);
+                if (heapFile != null) {
+                    String heapFileName = "layer-" + layer + "-bin-" + hashValue;
+                    binNames.add(heapFileName);
+                }
+            }
+        }
+        return binNames;
     }
 
     public static void main(String[] args) {
@@ -73,6 +98,10 @@ public class LSHFIndex {
             // Insert the vector into the LSHFIndex
             RID rid = new RID(new PageId(1), 1);
             lshfIndex.insertRecord(vector, rid);
+
+            // Get the bin names for the vector
+            List<String> binNames = lshfIndex.getBins(vector);
+            System.out.println("Bin names: " + binNames);
 
             // Clean up
             SystemDefs.JavabaseDB.closeDB();
