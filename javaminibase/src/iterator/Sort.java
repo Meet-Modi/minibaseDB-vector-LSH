@@ -702,7 +702,7 @@ public class Sort extends Iterator implements GlobalConst
      * @param sort_field_len the length of the sort field
      * @param n_pages        amount of memory (in pages) available for sorting
      * @param Target         Vector100Dtype that we want to sort all the tuples against by closest distance
-     * @param k_nearest              the number of outputs we need to maintain and return after sorting. If k = 0 we sort all tuples wrt dist from target.
+     * @param k_nearest      the number of outputs we need to maintain and return after sorting. If k = 0 we sort all tuples wrt dist from target.
      * @throws IOException   from lower layers
      * @throws SortException something went wrong in the lower layer.
      */
@@ -777,7 +777,7 @@ public class Sort extends Iterator implements GlobalConst
         }
         else
         {
-            for (int j = 0; j < _n_pages; k_nearest++) bufs[j] = new byte[MAX_SPACE];
+            for (int j = 0; j < _n_pages; j++) bufs[j] = new byte[MAX_SPACE];
         }
 
         first_time = true;

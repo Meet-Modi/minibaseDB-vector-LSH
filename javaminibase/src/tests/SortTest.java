@@ -1135,7 +1135,7 @@ class SORTDriver extends TestDriver
             e.printStackTrace();
         }
 
-        for (int i = 0; i < NUM_RECORDS; i++)
+        for (int i = NUM_RECORDS-1; i >= 0; i--)
         {
             try
             {
@@ -1150,6 +1150,15 @@ class SORTDriver extends TestDriver
             try
             {
                 rid = f.insertRecord(t.returnTupleByteArray());
+            }
+            catch (Exception e)
+            {
+                status = FAIL;
+                e.printStackTrace();
+            }
+            try
+            {
+                System.out.println("inserted:"+t.get100DVectFld(1).vector[0]);
             }
             catch (Exception e)
             {
@@ -1221,7 +1230,9 @@ class SORTDriver extends TestDriver
             {
                 AttrType comp_type = new AttrType(AttrType.attrVector100D);
                 outval = TupleUtils.CompareTupleWithTuple((AttrType) comp_type, target_tuple, 1, t, 1);
-                System.out.println("Retrived vector distance: " + outval);
+                short retrieved_vector_val = t.get100DVectFld(1).vector[0];
+                short target_vector_val = target_tuple.get100DVectFld(1).vector[1];
+                System.out.println("Taget:"+target_vector_val+" Retrived vector:"+retrieved_vector_val+" vector distance:" + outval);
             }
             catch (Exception e)
             {
