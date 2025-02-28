@@ -6,12 +6,12 @@ import java.util.Random;
 public class HashKey {
     private int L;
     private int x;
-    private Random random;
+    // private Random random;
 
     public HashKey(int L, int x) {
         this.L = L; // no of layers
         this.x = x; // no of bins
-        this.random = new Random();
+        // this.random = new Random();
     }
 
     public int[] generateHashValues(Vector100Dtype vector) {
