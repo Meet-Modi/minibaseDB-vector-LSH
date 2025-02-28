@@ -173,12 +173,7 @@ public class Sort extends Iterator implements GlobalConst
         // Set tuple values
         try
         {
-            // If we're dealing with 100dvectors, assign lastElem value to
-            // target vector.
-            if (sortFldType.attrType == AttrType.attrVector100D)
-            {
-                MIN_VAL(lastElem, sortFldType);
-            }
+
             MIN_VAL(target_tuple, sortFldType);
         }
         catch (UnknowAttrType e)
@@ -361,7 +356,11 @@ public class Sort extends Iterator implements GlobalConst
                 // This line needs to be studied carefully on how it affects 100dvector enqueue.
                 // I doubt this matters because when we define the splay priority queues.
                 // We created a new pnode target and new constructors for the Splay priority queues.
-                // We store the target vector in the trees itself. So no need to worry about updating lastElem.
+                // We store the target vector in the trees itself.
+                // So no need to worry about updating lastElem here and wether it affects the vector compare functionality.
+                // It is still needed to implement the sort for other datatypes, because comparision happens between 2 operands.
+                // Where as for vector comparision, we have 3 operands. The 2 we are comparing and the target.
+                // Since target participates in all comparisions of an SplayTree, its better to have it as an attribute of the tree
 
                 TupleUtils.SetValue(lastElem, cur_node.tuple, _sort_fld, sortFldType);
 
@@ -500,6 +499,8 @@ public class Sort extends Iterator implements GlobalConst
             }
 
             // Check if we are done
+            // For 100D vector case
+            // this shouldn't be 0 unless we done.
             if (p_elems_curr_Q == 0)
             {
                 // current queue empty despite our attemps to fill in
