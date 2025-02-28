@@ -87,14 +87,14 @@ public class LSHFLeafPage extends HFPage {
      * @return the first RID in the page; null if no records.
      * @throws IOException I/O errors
      */
-    public RID getFirst(RID rid) throws IOException, InvalidSlotNumberException {
-        RID firstRid = firstRecord();
-        if (firstRid == null) {
-            return null;
-        }
-        rid.copyRid(firstRid);
-        return getRID(rid);
-    }
+    // public RID getFirst(RID rid) throws IOException, InvalidSlotNumberException {
+    //     RID firstRid = firstRecord();
+    //     if (firstRid == null) {
+    //         return null;
+    //     }
+    //     rid.copyRid(firstRid);
+    //     return getRID(rid);
+    // }
 
     /**
      * Get the next record in the leaf page.
@@ -103,14 +103,14 @@ public class LSHFLeafPage extends HFPage {
      * @return the next RID in the page; null if no more records.
      * @throws IOException I/O errors
      */
-    public RID getNext(RID rid) throws IOException, InvalidSlotNumberException {
-        RID nextRid = nextRecord(rid);
-        if (nextRid == null) {
-            return null;
-        }
-        rid.copyRid(nextRid);
-        return getRID(rid);
-    }
+    // public RID getNext(RID rid) throws IOException, InvalidSlotNumberException {
+    //     RID nextRid = nextRecord(rid);
+    //     if (nextRid == null) {
+    //         return null;
+    //     }
+    //     rid.copyRid(nextRid);
+    //     return getRID(rid);
+    // }
 
     /**
      * Get the current record in the leaf page.
@@ -119,9 +119,9 @@ public class LSHFLeafPage extends HFPage {
      * @return the current RID in the page.
      * @throws IOException I/O errors
      */
-    public RID getCurrent(RID rid) throws IOException, InvalidSlotNumberException {
-        return getRID(rid);
-    }
+    // public RID getCurrent(RID rid) throws IOException, InvalidSlotNumberException {
+    //     return getRID(rid);
+    // }
 
     /**
      * Delete a record from the leaf page.
@@ -130,9 +130,10 @@ public class LSHFLeafPage extends HFPage {
      * @return true if success; false if rid is invalid (no record in the rid).
      * @throws DeleteRecException error when delete
      */
-    public boolean deleteRecord(RID rid) throws DeleteRecException {
+    public boolean deleteIndexRecord(RID rid) throws DeleteRecException {
         try {
             super.deleteRecord(rid);
+            // TODO : Will slot compaction come here?
             compact_slot_dir();
             return true;
         } catch (Exception e) {
@@ -160,13 +161,14 @@ public class LSHFLeafPage extends HFPage {
      * @return the RID.
      * @throws IOException I/O errors
      */
-    private RID getRID(RID rid) throws IOException, InvalidSlotNumberException {
-        Tuple tuple = getRecord(rid);
-        tuple.setHdr((short) 2, new AttrType[]{new AttrType(AttrType.attrInteger), new AttrType(AttrType.attrInteger)}, null);
-        int pageNo = tuple.getIntFld(1);
-        int slotNo = tuple.getIntFld(2);
-        return new RID(new PageId(pageNo), slotNo);
-    }
+    // TODO : Handle Error and slot count here.
+    // private RID getRID(RID rid) throws IOException, InvalidSlotNumberException {
+    //     Tuple tuple = getRecord(rid);
+    //     tuple.setHdr((short) 2, new AttrType[]{new AttrType(AttrType.attrInteger), new AttrType(AttrType.attrInteger)}, null);
+    //     int pageNo = tuple.getIntFld(1);
+    //     int slotNo = tuple.getIntFld(2);
+    //     return new RID(new PageId(pageNo), slotNo);
+    // }
 
     public static void main(String[] args) {
         try {
