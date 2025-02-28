@@ -6,7 +6,7 @@ public class Vector100Dtype
     public double magnitude;
     public Vector100Dtype()
     {
-        vector = new short[100] ;
+        vector = new short[100];
         magnitude = 0.0;
     }
 
