@@ -98,7 +98,7 @@ public abstract class pnodePQ
      *                             <code>attrNull</code> encountered
      * @throws TupleUtilsException error in tuple compare routines
      */
-    public int pnodeCMP(pnode a, pnode b, pnode target)
+    public int pnodeVectorCMP(pnode a, pnode b, pnode target)
             throws IOException, UnknowAttrType, TupleUtilsException
     {
         int a_distance = TupleUtils.CompareTupleWithTuple(fld_type, a.tuple, fld_no, target.tuple, fld_no);
@@ -116,6 +116,13 @@ public abstract class pnodePQ
         return ans;
     }
 
+    public int pnodeCMP(pnode a, pnode b)
+            throws IOException, UnknowAttrType, TupleUtilsException
+    {
+        int ans = TupleUtils.CompareTupleWithTuple(fld_type, a.tuple, fld_no, b.tuple, fld_no);
+        return ans;
+    }
+
     /**
      * tests whether the two elements are equal.
      *
@@ -128,9 +135,9 @@ public abstract class pnodePQ
      *                             <code>attrNull</code> encountered
      * @throws TupleUtilsException error in tuple compare routines
      */
-    public boolean pnodeEQ(pnode a, pnode b, pnode target) throws IOException, UnknowAttrType, TupleUtilsException
+    public boolean pnodeEQ(pnode a, pnode b) throws IOException, UnknowAttrType, TupleUtilsException
     {
-        return pnodeCMP(a, b, target) == 0;
+        return pnodeCMP(a, b) == 0;
     }
 
     /**

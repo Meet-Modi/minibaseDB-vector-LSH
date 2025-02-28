@@ -89,7 +89,15 @@ public class pnodeSplayPQ extends pnodePQ
             return;
         }
 
-        int comp = pnodeCMP(item, t.item, target.item);
+        int comp = 0;
+        if (target == null)
+        {
+            comp = pnodeCMP(item, t.item);
+        }
+        else
+        {
+            comp = pnodeVectorCMP(item, t.item, target.item);
+        }
 
         pnodeSplayNode l = pnodeSplayNode.dummy;
         pnodeSplayNode r = pnodeSplayNode.dummy;
@@ -107,7 +115,17 @@ public class pnodeSplayPQ extends pnodePQ
                     comp = 0;
                     done = true;
                 }
-                else comp = pnodeCMP(item, tr.item, target.item);
+                else
+                {
+                    if (target == null)
+                    {
+                        comp = pnodeCMP(item, tr.item);
+                    }
+                    else
+                    {
+                        comp = pnodeVectorCMP(item, tr.item, target.item);
+                    }
+                }
 
                 if ((sort_order.tupleOrder == TupleOrder.Ascending && comp <= 0) || (sort_order.tupleOrder == TupleOrder.Descending && comp >= 0))
                 {
@@ -125,7 +143,17 @@ public class pnodeSplayPQ extends pnodePQ
                         comp = 0;
                         done = true;
                     }
-                    else comp = pnodeCMP(item, trr.item, target.item);
+                    else
+                    {
+                        if (target == null)
+                        {
+                            comp = pnodeCMP(item, trr.item);
+                        }
+                        else
+                        {
+                            comp = pnodeVectorCMP(item, trr.item, target.item);
+                        }
+                    }
 
                     if ((t.rt = tr.lt) != null) t.rt.par = t;
                     tr.lt = t;
@@ -145,7 +173,17 @@ public class pnodeSplayPQ extends pnodePQ
                     comp = 0;
                     done = true;
                 }
-                else comp = pnodeCMP(item, tl.item, target.item);
+                else
+                {
+                    if (target == null)
+                    {
+                        comp = pnodeCMP(item, tl.item);
+                    }
+                    else
+                    {
+                        comp = pnodeVectorCMP(item, tl.item, target.item);
+                    }
+                }
 
                 if ((sort_order.tupleOrder == TupleOrder.Ascending && comp >= 0) || (sort_order.tupleOrder == TupleOrder.Descending && comp <= 0))
                 {
@@ -163,7 +201,17 @@ public class pnodeSplayPQ extends pnodePQ
                         comp = 0;
                         done = true;
                     }
-                    else comp = pnodeCMP(item, tll.item, target.item);
+                    else
+                    {
+                        if (target == null)
+                        {
+                            comp = pnodeCMP(item, tll.item);
+                        }
+                        else
+                        {
+                            comp = pnodeVectorCMP(item, tll.item, target.item);
+                        }
+                    }
 
                     if ((t.lt = tl.rt) != null) t.lt.par = t;
                     tl.rt = t;

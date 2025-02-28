@@ -360,6 +360,7 @@ public class Tuple implements GlobalConst
     public Tuple setStrFld(int fldNo, String val)
             throws IOException, FieldNumberOutOfBoundException
     {
+
         if ((fldNo > 0) && (fldNo <= fldCnt))
         {
             Convert.setStrValue(val, fldOffset[fldNo - 1], data);

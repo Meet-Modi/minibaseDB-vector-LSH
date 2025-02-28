@@ -153,23 +153,33 @@ public class Sort extends Iterator implements GlobalConst
         Tuple tuple;
         pnode cur_node;
 
-        // define last Elem and set it to the target tuple. Since distance from target to itself is 0.
+        // lastElem and target_tuple manage how the file system based sorting works.
         Tuple lastElem = new Tuple(tuple_size);
+        Tuple target_tuple = new Tuple(tuple_size);
 
-        // set header first.
+        // Set tuple headers.
         try
         {
+            // if we're dealing with 100Dvectors, then setup lastElem value
+            // This helps when doing the writes to files in the latter half of this code.
             lastElem.setHdr(n_cols, _in, str_lens);
+            target_tuple.setHdr(n_cols, _in, str_lens);
         }
         catch (Exception e)
         {
             throw new SortException(e, "Sort.java: setHdr() failed");
         }
 
-        // set lastElem to target using MIN_VAL
+        // Set tuple values
         try
         {
-            MIN_VAL(lastElem, sortFldType);
+            // If we're dealing with 100dvectors, assign lastElem value to
+            // target vector.
+            if (sortFldType.attrType == AttrType.attrVector100D)
+            {
+                MIN_VAL(lastElem, sortFldType);
+            }
+            MIN_VAL(target_tuple, sortFldType);
         }
         catch (UnknowAttrType e)
         {
@@ -180,14 +190,26 @@ public class Sort extends Iterator implements GlobalConst
             throw new SortException(e, "MIN_VAL failed");
         }
 
-        // define the target_pnode to be able to reuse the heap datastructures.
-        // now our heaps will always have the same root. Need to unsure the root doesn't change.
+
+        // target 100dvector's pnode. To be able to reuse sort for 100dvectors.
+        // we assign target_tuple to this pnode's tuple.
+        // pnode attributes:
+        //      -run number
+        //      -tuple
 
         pnode target_node = new pnode();
-        target_node.tuple = lastElem;
+        target_node.tuple = target_tuple;
+
+        // Initialize 2 splay priority queues.
+        // pnodeSplayPQ has 2 attributes:
+        //                  pnodeSplaynode root
+        //                  pnodeSplaynode target (this is the 100dvector target node)
 
         pnodeSplayPQ pcurr_Q = null;
         pnodeSplayPQ pother_Q = null;
+
+        // 2 constructors.
+        // one for regular datatypes. another for 100dvector datatypes.
         if (sortFldType.attrType != AttrType.attrVector100D)
         {
             pnodeSplayPQ Q1 = new pnodeSplayPQ(_sort_fld, sortFldType, order);
@@ -203,20 +225,25 @@ public class Sort extends Iterator implements GlobalConst
             pother_Q = Q2;
         }
 
-        int run_num = 0;  // keeps track of the number of runs
+        // this is the current run number tracker.
+        int run_num = 0;
 
-        // number of elements in Q
-        //    int nelems_Q1 = 0;
-        //    int nelems_Q2 = 0;
+        // number of elements in both queues.
         int p_elems_curr_Q = 0;
         int p_elems_other_Q = 0;
 
+        // comparision result.
         int comp_res;
 
-        // set the lastElem to be the minimum value for the sort field
-        // for vector search, we only care about Ascending.
-        // the min value for vector sort will be the target vector itself.
-        // since it is at distance 0 from itself.
+
+
+        // we want sort field type for vector search to only be ascending.
+        // lastElim is defined for all other datatypes so that it is a good
+        // starting value to compare and sort other incoming values against.
+        // for 100Dvectors, we already define the min_value above in target_tuple
+        // and assign it to pnode target_node for the splay tree. So we do not execute this
+        // block of code when dealing with 100dvectors.
+
         if (sortFldType.attrType!=AttrType.attrVector100D)
         {
             if (order.tupleOrder == TupleOrder.Ascending)
@@ -253,28 +280,34 @@ public class Sort extends Iterator implements GlobalConst
         }
 
         // maintain a fixed maximum number of elements in the heap
+        // Load up current queue.
         while ((p_elems_curr_Q + p_elems_other_Q) < max_elems)
         {
+            // _am is a filescan object.
+            // filescan extends iterator.
+            // we read heapfiles with input data using _am.
             try
             {
-                tuple = _am.get_next();  // according to Iterator.java
+                tuple = _am.get_next();
             }
             catch (Exception e)
             {
                 e.printStackTrace();
                 throw new SortException(e, "Sort.java: get_next() failed");
             }
+
+            // if we get empty value, we're done reading input.
             if (tuple == null)
             {
                 break;
             }
 
             // If we get the next element and its not null.
-
+            // Create a node and assign the current tuple from input to it.
             cur_node = new pnode();
-            cur_node.tuple = new Tuple(tuple); // tuple copy needed --  Bingjie 4/29/98
+            cur_node.tuple = new Tuple(tuple);
 
-            // enqueue current node. This probably needs to be modded.
+            // Enqueue current node. This probably needs to be modded.
             pcurr_Q.enq(cur_node);
             p_elems_curr_Q++;
         }
@@ -282,14 +315,26 @@ public class Sort extends Iterator implements GlobalConst
         // now the queue is full, starting writing to file while keep trying
         // to add new tuples to the queue. The ones that does not fit are put
         // on the other queue temperarily
+
+        // unload current queue and see where the elements go.
         while (true)
         {
+            // Get a node from current queue pcurr_Q
             cur_node = pcurr_Q.deq();
             if (cur_node == null) break;
             p_elems_curr_Q--;
 
-            comp_res = TupleUtils.CompareTupleWithValue(sortFldType, cur_node.tuple, _sort_fld, lastElem);  // need tuple_utils.java
+            // compare cur_node.tuple to lastElem (smallest if asc or largest if desc possible value).
+            comp_res = TupleUtils.CompareTupleWithValue(sortFldType, cur_node.tuple, _sort_fld, lastElem);
 
+            // for regular values
+            // comp_res < 0 implies cur_node.tuple < lastElem
+            // comp_res > 0 implies cur_node.tuple > lastElem
+
+            // for 100DVectors
+            // (comp_res > 0 && Ascending) order always, since comp_res = distance(target_tuple,cur_node.tuple)
+            // TupleOrder is always going to be Ascending here for 100DVectors.
+            // therefore if statement never gets executed for 100Dvectors
             if ((comp_res < 0 && order.tupleOrder == TupleOrder.Ascending) || (comp_res > 0 && order.tupleOrder == TupleOrder.Descending))
             {
                 // doesn't fit in current run, put into the other queue
@@ -302,37 +347,61 @@ public class Sort extends Iterator implements GlobalConst
                     throw new SortException(e, "Sort.java: UnknowAttrType caught from Q.enq()");
                 }
                 p_elems_other_Q++;
+
+                if (sortFldType.attrType==AttrType.attrVector100D)
+                {
+                    // We should never be here for 100Dvectors.
+                    System.out.println("WARNING!!!!!!!!!!!!!!");
+                }
+
             }
             else
             {
                 // set lastElem to have the value of the current tuple,
-                // need tuple_utils.java
-                TupleUtils.SetValue(lastElem, cur_node.tuple, _sort_fld, sortFldType);
-                // write tuple to output file, need io_bufs.java, type cast???
-                //	System.out.println("Putting tuple into run " + (run_num + 1));
-                //	cur_node.tuple.print(_in);
+                // This line needs to be studied carefully on how it affects 100dvector enqueue.
+                // I doubt this matters because when we define the splay priority queues.
+                // We created a new pnode target and new constructors for the Splay priority queues.
+                // We store the target vector in the trees itself. So no need to worry about updating lastElem.
 
+                TupleUtils.SetValue(lastElem, cur_node.tuple, _sort_fld, sortFldType);
+
+                // write tuple to output file for the current run.
                 o_buf.Put(cur_node.tuple);
             }
 
-            // check whether the other queue is full
+            // IF other queue full, SETUP Swap.
+            // if other queue is full, setup necessary heapfile, output buffer and tuple tracker
+            // swap the queues and make this the current queue.
             if (p_elems_other_Q == max_elems)
             {
                 // close current run and start next run
+                // keep track of number of tuples in each run.
                 n_tuples[run_num] = (int) o_buf.flush();  // need io_bufs.java
                 run_num++;
 
-                // check to see whether need to expand the array
+                // If run_num reached max number of runs allocated,
+                // double the number of runs. Allocate the respective heapfiles.
+                // each run has its own heapfile.
                 if (run_num == n_tempfiles)
                 {
+                    // create new heapfile array with double the number of heapfiles.
                     Heapfile[] temp1 = new Heapfile[2 * n_tempfiles];
+
+                    // Copy existing heapfiles into the new array.
                     for (int i = 0; i < n_tempfiles; i++)
                     {
                         temp1[i] = temp_files[i];
                     }
+
+                    // update the current heapfile array to the new heapfile array
+                    // update the count for number of heapfiles available.
                     temp_files = temp1;
                     n_tempfiles *= 2;
 
+                    // Each heapfile has an associated count of number of tuples inside it.
+                    // update the tuple count tracker.
+                    // double its size to allocate new number of heapfiles.
+                    // copy existing tuple counts for each heapfile into it.
                     int[] temp2 = new int[2 * n_runs];
                     for (int j = 0; j < n_runs; j++)
                     {
@@ -342,6 +411,7 @@ public class Sort extends Iterator implements GlobalConst
                     n_runs *= 2;
                 }
 
+                // create new heapfile
                 try
                 {
                     temp_files[run_num] = new Heapfile(null);
@@ -351,7 +421,7 @@ public class Sort extends Iterator implements GlobalConst
                     throw new SortException(e, "Sort.java: create Heapfile failed");
                 }
 
-                // need io_bufs.java
+                // create an output buffer for the new heapfile.
                 o_buf.init(bufs, _n_pages, tuple_size, temp_files[run_num], false);
 
                 // set the last Elem to be the minimum value for the sort field
@@ -396,6 +466,7 @@ public class Sort extends Iterator implements GlobalConst
             }
 
             // now check whether the current queue is empty
+            // for 100dvectors, we unload the current queue above and load it again here.
             else if (p_elems_curr_Q == 0)
             {
                 while ((p_elems_curr_Q + p_elems_other_Q) < max_elems)
@@ -414,7 +485,7 @@ public class Sort extends Iterator implements GlobalConst
                         break;
                     }
                     cur_node = new pnode();
-                    cur_node.tuple = new Tuple(tuple); // tuple copy needed --  Bingjie 4/29/98
+                    cur_node.tuple = new Tuple(tuple);
 
                     try
                     {
@@ -523,7 +594,6 @@ public class Sort extends Iterator implements GlobalConst
         // close the last run
         n_tuples[run_num] = (int) o_buf.flush();
         run_num++;
-
         return run_num;
     }
 
@@ -722,6 +792,8 @@ public class Sort extends Iterator implements GlobalConst
         n_cols = len_in;
         int n_strs = 0;
 
+        // Create a copy of attribute types list.
+        // Count number of string attribute types.
         for (int i = 0; i < len_in; i++)
         {
             _in[i] = new AttrType(in[i].attrType);
@@ -731,6 +803,8 @@ public class Sort extends Iterator implements GlobalConst
             }
         }
 
+        // copy string lengths from str_sizes to str_lens array.
+        // recount number of strings.
         str_lens = new short[n_strs];
 
         n_strs = 0;
@@ -743,6 +817,7 @@ public class Sort extends Iterator implements GlobalConst
             }
         }
 
+        // Dummy tuple.
         Tuple t = new Tuple(); // need Tuple.java
         try
         {
@@ -754,13 +829,19 @@ public class Sort extends Iterator implements GlobalConst
         }
         tuple_size = t.size();
 
+        // copy of iterator, copy of field to sort on
+        // copy of sort_order and copy of number of buffer pages allowed.
         _am = am;
         _sort_fld = sort_fld;
         order = sort_order;
         _n_pages = n_pages;
 
-        // this may need change, bufs ???  need io_bufs.java
-        //    bufs = get_buffer_pages(_n_pages, bufs_pids, bufs);
+        // ignore* :this may need change, bufs ???  need io_bufs.java
+        // ignore* :bufs = get_buffer_pages(_n_pages, bufs_pids, bufs);
+
+        // Create a PageId array for buffer page ids
+        // create a 2-d byte array for [-pages][page size here maybe]
+        // get n_pages worth of buffer pages to work with.
         bufs_pids = new PageId[_n_pages];
         bufs = new byte[_n_pages][];
 
@@ -784,6 +865,7 @@ public class Sort extends Iterator implements GlobalConst
 
         // as a heuristic, we set the number of runs to an arbitrary value
         // of ARBIT_RUNS
+
         temp_files = new Heapfile[ARBIT_RUNS];
         n_tempfiles = ARBIT_RUNS;
         n_tuples = new int[ARBIT_RUNS];
@@ -798,16 +880,28 @@ public class Sort extends Iterator implements GlobalConst
             throw new SortException(e, "Sort.java: Heapfile error");
         }
 
-        o_buf = new OBuf();
+        // This is the abstraction we use to load up the buffer pages
+        // We use OBuf once full to flush to heap file.
+        // Obuf arguments
+        // bufs - actual buffer with pages that we allocated above.
+        // _n_pages - number of buffer pages
+        // tuple_size - self explanatory..
+        // temp_files[0] - the heap file to flush the output buffer to once full.
 
+        o_buf = new OBuf();
         o_buf.init(bufs, _n_pages, tuple_size, temp_files[0], false);
-        //    output_tuple = null;
+        // output_tuple = null;
 
         max_elems_in_heap = 200;
         sortFldLen = sort_fld_len;
 
+        // We use Splay trees as priority queues.
+        // Self organizing trees on insert.
+        // input - sort_fied number, field attribute type, sort field order.
+
         Q = new pnodeSplayPQ(sort_fld, in[sort_fld - 1], order);
 
+        // setup buffer tuple.
         op_buf = new Tuple(tuple_size);   // need Tuple.java
         try
         {
@@ -817,6 +911,7 @@ public class Sort extends Iterator implements GlobalConst
         {
             throw new SortException(e, "Sort.java: op_buf.setHdr() failed");
         }
+
         Target = target_vector;
         k = k_nearest;
     }
