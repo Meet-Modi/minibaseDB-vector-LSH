@@ -329,23 +329,27 @@ class VectorDriver extends TestDriver implements GlobalConst
     {
         // Step 1: Generate input text file to read 10,000 random vectors from.
 
-        // Step 2: Specify the number of hash functions per layer (n).
+        // Step 2: Specify the number of hash functions per layer (n). This need to read query structure from project document.
 
-        // Step 3: Specify the number of layers (L)
+        // Step 3: Specify the number of layers (L). This need to read query structure from project document.
 
-        // Step 4: instantiate the n hash functions L times. ( h_1,1 h_1,2 h_1,3 h_1,4 h_1,5,
+        // Step 4: instantiate the Hasher.                   ( h_1,1 h_1,2 h_1,3 h_1,4 h_1,5,
         //                                                     h_2,1 h_2,2 h_2,3 h_2,4 h_2,5,
         //                                                     h_3,1 h_3,2 h_3,3 h_3,4 h_3,5 )
 
         // Step 5: The hasher is an abstraction that generates the hash values above. ^^^^^^^^^^
-
-        // Step 6: using index file, access the corresponding 3 heap file with names   ( h_11 : h_12 : h_13 : h_14 : h_15,
+        //         using this hasher, insert all 10,000 random vectors into respective heap files
+        //         with filenames given by matrix below in next step.
+        //
+        //         HERE WE ARE READY TO TEST INCOMING QUERIES
+        // Step 6: For incoming query, access the corresponding 3 heap file with names ( h_11 : h_12 : h_13 : h_14 : h_15,
         //                                                                               h_21 : h_22 : h_23 : h_24 : h_25,
         //                                                                               h_31 : h_32 : h_33 : h_34 : h_35 )
 
         // Step 7: compute union of all tuples from all 3 files into a temp heapfile
-        // Step 8: run Sort() on the temp heapfile k times for k-NN search. if k = 0, return all results
-        // Step 9: see the alternative query pattern for the all elements in range k and implement its functionality.
+        // Step 8: run Sort() on the temp heapfile k times for k-NN search. if k = 0, return all results.
+        //         need to figure out details about the specifics from the project description.
+
         return true;
     }
 
