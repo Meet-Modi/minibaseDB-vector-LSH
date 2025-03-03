@@ -11,38 +11,45 @@ import heap.HFException;
 import heap.Heapfile;
 import heap.InvalidTypeException;
 import heap.Tuple;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class LSHFIndex {
+public class LSHFIndex
+{
     private HashKey hashKey;
     private Map<Integer, Map<Integer, Heapfile>> heapFiles;
 
-    public LSHFIndex(int L, int x) {
+    public LSHFIndex(int L, int x)
+    {
         this.hashKey = new HashKey(L, x);
         this.heapFiles = new HashMap<>();
     }
 
     public void insertRecord(Vector100Dtype vector, RID rid) throws IOException,
-            ConstructPageException,
-            InsertRecException,
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            Exception {
+                                                                    ConstructPageException,
+                                                                    InsertRecException,
+                                                                    HFException,
+                                                                    HFBufMgrException,
+                                                                    HFDiskMgrException,
+                                                                    Exception
+    {
         int[] hashValues = hashKey.generateHashValues(vector);
-        for (int layer = 0; layer < hashValues.length; layer++) {
+        for (int layer = 0; layer < hashValues.length; layer++)
+        {
             int hashValue = hashValues[layer];
             Map<Integer, Heapfile> layerMap = heapFiles.get(layer);
-            if (layerMap == null) {
+            if (layerMap == null)
+            {
                 layerMap = new HashMap<>();
                 heapFiles.put(layer, layerMap);
             }
             Heapfile heapFile = layerMap.get(hashValue);
-            if (heapFile == null) {
+            if (heapFile == null)
+            {
                 String heapFileName = "layer-" + layer + "-bin-" + hashValue;
                 heapFile = new Heapfile(heapFileName); // Create a new heap file with a unique name
                 layerMap.put(hashValue, heapFile);
@@ -51,24 +58,29 @@ public class LSHFIndex {
         }
     }
 
-    private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid) throws IOException, InsertRecException, Exception {
+    private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid) throws IOException, InsertRecException, Exception
+    {
         Tuple tuple = new Tuple();
         tuple.setHdr((short) 2,
-                new AttrType[] { new AttrType(AttrType.attrInteger), new AttrType(AttrType.attrInteger) }, null);
+                new AttrType[]{new AttrType(AttrType.attrInteger), new AttrType(AttrType.attrInteger)}, null);
         tuple.setIntFld(1, rid.pageNo.pid);
         tuple.setIntFld(2, rid.slotNo);
         heapFile.insertRecord(tuple.returnTupleByteArray());
     }
 
-    public List<String> getBins(Vector100Dtype vector) throws IOException, ConstructPageException {
+    public List<String> getBins(Vector100Dtype vector) throws IOException, ConstructPageException
+    {
         int[] hashValues = hashKey.generateHashValues(vector);
         List<String> binNames = new ArrayList<>();
-        for (int layer = 0; layer < hashValues.length; layer++) {
+        for (int layer = 0; layer < hashValues.length; layer++)
+        {
             int hashValue = hashValues[layer];
             Map<Integer, Heapfile> layerMap = heapFiles.get(layer);
-            if (layerMap != null) {
+            if (layerMap != null)
+            {
                 Heapfile heapFile = layerMap.get(hashValue);
-                if (heapFile != null) {
+                if (heapFile != null)
+                {
                     String heapFileName = "layer-" + layer + "-bin-" + hashValue;
                     binNames.add(heapFileName);
                 }
@@ -77,8 +89,10 @@ public class LSHFIndex {
         return binNames;
     }
 
-    public static void main(String[] args) {
-        try {
+    public static void main(String[] args)
+    {
+        try
+        {
             // Initialize the system
             String dbpath = "/tmp/minibase.lshfindex.test";
             String logpath = "/tmp/minibase.lshfindex.log";
@@ -91,7 +105,8 @@ public class LSHFIndex {
 
             // Create a sample vector
             Vector100Dtype vector = new Vector100Dtype();
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < 100; i++)
+            {
                 vector.vector[i] = (short) (i + 1);
             }
 
@@ -106,7 +121,9 @@ public class LSHFIndex {
             // Clean up
             SystemDefs.JavabaseDB.closeDB();
 
-        } catch (Exception e) {
+        }
+        catch (Exception e)
+        {
             e.printStackTrace();
         }
     }

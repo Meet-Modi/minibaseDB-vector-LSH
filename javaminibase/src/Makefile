@@ -43,7 +43,7 @@ doc:
 
 test:
 # 	cd tests; make bmtest dbtest; whoami; make hftest bttest indextest jointest sorttest sortmerge
-	cd tests; whoami; make sorttest
+	cd tests; whoami; make vectortest
 
 clean:
 	\rm -f $(CLASSPATH)/*.class *~ \#* core $(JARFILES) TRACE

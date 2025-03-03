@@ -70,6 +70,15 @@ SMJoin:SM_JoinTest.java
 sortmerge: SMJoin
 	$(JAVA) tests.SM_JoinTest
 
+# test Vector100DFunctionality
+
+VectorTest:VectorTest.java
+	$(JAVAC) TestDriver.java VectorTest.java
+
+vectortest: VectorTest
+	$(JAVA) tests.VectorTest
+
+
 
 
 

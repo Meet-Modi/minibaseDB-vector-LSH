@@ -1,5 +1,6 @@
 package LSHFIndex;
 
-public class LSHFIndexPage {
-    
+public class LSHFIndexPage
+{
+
 }
