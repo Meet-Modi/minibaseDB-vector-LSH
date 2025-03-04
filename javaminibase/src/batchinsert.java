@@ -35,7 +35,8 @@ public class batchinsert implements GlobalConst
         short string_attribute_count = 0;
         short vector_attribute_count = 0;
         LSHFIndex[] lshfIndices;
-        // Create a random access file pointer to read the file: data_file_name
+
+        // Create a Buffered reader to read the file: data_file_name
         try
         {
             BufferedReader br = new BufferedReader(new FileReader(data_file_name));
