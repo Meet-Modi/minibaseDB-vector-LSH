@@ -6,9 +6,13 @@ import java.util.Random;
 
 public class HashKey
 {
-    private int L;
-    private int x;
+    int L, x;
+    private int Layers;
+    private int shift_b;
+    private int bin_length_w;
+    private int function_per_layer_k;
     // private Random random;
+
 
     public HashKey(int L, int x)
     {
@@ -30,12 +34,7 @@ public class HashKey
     private int generateHashValue(Vector100Dtype vector)
     {
         // Dummy hash function: sum of vector elements modulo x + 1
-        int sum = 0;
-        for (short v : vector.vector)
-        {
-            sum += v;
-        }
-        return (sum % x) + 1;
+
     }
 
     public static void main(String[] args)

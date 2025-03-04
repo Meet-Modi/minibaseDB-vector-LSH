@@ -18,10 +18,28 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * LSHF index.
+ * LSHF index is a map of <Layer Number, Layer Map>
+ * Each Layer map is a map of <int[] hash, heapfile>
+ * Each Layer is a tree. Bunch of trees is LSHForest.
+ * Each Layer = h1h2h3...hn where : hn = number of hashes per layer.
+ */
 public class LSHFIndex
 {
     private HashKey hashKey;
-    private Map<Integer, Map<Integer, Heapfile>> heapFiles;
+
+    // LSHF parameters.
+    private int num_layers;
+
+    // Layers parameters
+    private Layer[] layers;
+    private int bin_length;
+    private int num_hash_functions_per_layer;
+
+    private Map< Integer, Map<Integer[], Heapfile> > heapFiles;
+    private Map< Integer, Map<Integer[], Heapfile> > layer_maps;
+
 
     public LSHFIndex(int L, int x)
     {
