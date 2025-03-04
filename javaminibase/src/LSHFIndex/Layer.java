@@ -52,5 +52,4 @@ public class Layer
         return layer_hash;
     }
 
-
 }
