@@ -4,6 +4,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import global.*;
 import heap.*;
+import LSHFIndex.*;
 
 public class batchinsert implements GlobalConst
 {
@@ -31,6 +32,9 @@ public class batchinsert implements GlobalConst
 
         SystemDefs systemDefs = new SystemDefs(dbpath, NUMBUF,NUMBUF, "Clock");
 
+        short string_attribute_count = 0;
+        short vector_attribute_count = 0;
+        LSHFIndex[] lshfIndices;
         // Create a random access file pointer to read the file: data_file_name
         try
         {
@@ -61,8 +65,7 @@ public class batchinsert implements GlobalConst
 
             // Define attrTypes array based on each of the attributes for tuple.
             AttrType[] attrTypes = new AttrType[num_attributes];
-            short string_attribute_count = 0;
-            short vector_attribute_count = 0;
+
             for (int i = 0; i < num_attributes; i++ )
             {
                 int type = Integer.parseInt(attribute_types[i].trim());
@@ -219,6 +222,18 @@ public class batchinsert implements GlobalConst
 
         // TO DO:
         // init the LSHF index with num_hashes and num_layers
+        // for each of the 100Dvector attributes
+        lshfIndices = new LSHFIndex[vector_attribute_count];
+        for(int i = 0; i<vector_attribute_count; i++)
+        {
+            // Create an array of LSHF indexes
+            // The constructor should initialize each of the random attributes
+            // for the hash functions in the layer.
+            // Then we store these random attributes for all the layers into a heapfile as tuples.
+            // Need to figure out the details for this implementaiton in order to use the Index abstractions.
+            lshfIndices[i] = new LSHFIndex(num_layers, num_hashes);
+        }
+
     }
 }
 
