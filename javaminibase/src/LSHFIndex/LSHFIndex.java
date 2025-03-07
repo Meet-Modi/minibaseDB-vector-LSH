@@ -73,8 +73,10 @@ public class LSHFIndex
         }
 
         // Store Layer States to disk
+
         LayerState = new Heapfile(layerState);
-        // Layer metadata to store for each Layer.
+
+        // States to store for each Layer.
         // int: LayerNumber, int: HashNumber, 100DVector: HashRandom_Vector, int: HashShift
         Tuple temp = new Tuple();
 
@@ -113,7 +115,9 @@ public class LSHFIndex
 
         // Now we store layer meta data to another heap file layerMetaData
         // No. Layers, No. Hashes per layer, Bin width.
+        LayerMetaData = new Heapfile(layerMetaData);
         Tuple temp2 = new Tuple();
+
         numFlds = 3;
         attrTypes = new AttrType[numFlds];
         attrTypes[0] = new AttrType(AttrType.attrInteger);
@@ -122,13 +126,24 @@ public class LSHFIndex
         strsizes = new short[numFlds];
 
         temp2.setHdr(numFlds, attrTypes, strsizes);
+
         temp2.setIntFld(1,this.numLayers);
         temp2.setIntFld(2,this.noOfHashFunctionsPerLayer);
         temp2.setIntFld(3,this.binLength);
+
         LayerMetaData.insertRecord(temp2.getTupleByteArray());
 
     }
 
+    /**
+    * LayerStateFile
+     * int:LayerNumber, int:HashNumber, 100DVector:HashRandom_Vector, int:HashShift
+     *
+     * MetaDataFile
+     * int: numLayers, int: noOfHashFunctionsPerLayer, int:binLength
+     *
+     * This constructor is to restore an existing LSHF index with its randomized vectors and shifts.
+    * */
     public LSHFIndex(Heapfile LayerStateFile, Heapfile MetaDataFile)
             throws
             InvalidTupleSizeException,
