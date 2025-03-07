@@ -180,18 +180,14 @@ public class BatchInsert implements GlobalConst
         }
 
 
-        // TO DO:
-        // init the LSHF index with num_hashes and num_layers
-        // for each of the 100Dvector attributes
+        // For each 100Dvector attribute in the input
+        // init it's LSHF index with num_hashes and num_layers
         lshfIndices = new LSHFIndex[vector_attribute_count];
         for(int i = 0; i<vector_attribute_count; i++)
         {
             // Create an array of LSHF indexes
             // The constructor should initialize each of the random attributes
-            // for the hash functions in the layer.
-            // Then we store these random attributes for all the layers into a heapfile as tuples.
-            // Need to figure out the details for this implementaiton in order to use the Index abstractions.
-//            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes);
+            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes);
         }
 
         JavabaseBM.flushAllPages();

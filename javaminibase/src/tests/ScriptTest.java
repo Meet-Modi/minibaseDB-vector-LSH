@@ -5,8 +5,7 @@ import global.AttrType;
 import global.SystemDefs;
 import global.TupleOrder;
 import global.Vector100Dtype;
-import heap.Heapfile;
-import heap.Tuple;
+import heap.*;
 import iterator.*;
 import scripts.BatchInsert;
 
@@ -35,12 +34,28 @@ public class ScriptTest {
     static Vector100Dtype target = new Vector100Dtype();
     static short sortFieldNumber = 2;
 
+
+    public ScriptTest()
+            throws
+            SpaceNotAvailableException,
+            FieldNumberOutOfBoundException,
+            HFDiskMgrException,
+            HFException,
+            HFBufMgrException,
+            InvalidTupleSizeException,
+            InvalidSlotNumberException,
+            IOException,
+            InvalidTypeException
+    {
+    }
+
     public static void main(String[] args) throws Exception {
 
 //        2) PICK A TEST/TESTS. COMMENT OUT REST
 //        createNewDb();
 
         restartOldDb();
+        // Reinitialize the index here.
 
 //        readHeapFile();
 //        testSortOnExistingDb();
@@ -98,7 +113,12 @@ public class ScriptTest {
 
     public static void testHashGeneration() throws Exception
     {
-        LSHFIndex testIndex = new LSHFIndex(3, 2, 3);
+        int nLayers = 1;
+        int nHashes = 2;
+        int binLength = 500000;
+        LSHFIndex testIndex = new LSHFIndex(nLayers, binLength, nHashes);
+
+        // Test if same vector hases to the same values.
         short[] vector = new short[100];
         for (short i = 0; i < 100; i++)
         {
@@ -107,11 +127,33 @@ public class ScriptTest {
         Vector100Dtype testVector = new Vector100Dtype(vector);
 
         String[] hashes = testIndex.getAllLayersHash(testVector);
-        int count = 0;
-        for (String hash : hashes)
+        String[] hashes2 = testIndex.getAllLayersHash(testVector);
+        for (int i = 0; i < nLayers; i++)
         {
-            System.out.println("\nLayer"+count+": "+hash);
-            count++;
+            if(hashes[i].equals(hashes2[i]))
+            {
+                System.out.println("Layer"+i+": match");
+            }
+            else
+            {
+                System.out.println("Layer"+i+": mismatch");
+            }
+        }
+
+        // Count number of unique hashes generated for 10 different vectors.
+        for (short i = 0; i < 10; i++)
+        {
+            for (short j = 0; j < 100; j++)
+            {
+                vector[j] = i;
+            }
+            testVector = new Vector100Dtype(vector);
+            hashes = testIndex.getAllLayersHash(testVector);
+
+            for(String hash:hashes)
+            {
+                System.out.println("Vector"+i+": "+hash);
+            }
         }
     }
 
