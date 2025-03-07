@@ -1,23 +1,17 @@
 package LSHFIndex;
 
+import bufmgr.PageNotReadException;
 import global.AttrType;
 import global.RID;
 import global.Vector100Dtype;
 import heap.*;
+import iterator.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-
-import btree.IndexInsertRecException;
-import btree.IndexSearchException;
-import btree.InsertException;
-import btree.IteratorException;
-import btree.KeyTooLongException;
-import btree.LeafDeleteException;
-import btree.LeafInsertRecException;
-import btree.PinPageException;
-import btree.UnpinPageException;
+import java.util.stream.IntStream;
 
 /**
  * LSHF index.
@@ -36,10 +30,31 @@ public class LSHFIndex
     private Layer[] layers; // L
     private int binLength; // k
 
-    public Heapfile LayerState;
-    public Heapfile LayerMetaData;
-    private String layerState =  "LayerState";
-    private String layerMetaData = "LayerMetaData";
+    private static final String LAYER_STATE_HEAPFILE_NAME =  "LayerState";
+    private static final String LAYER_METADATA_HEAPFILE_NAME = "LayerMetaData";
+
+    private static final AttrType[] META_TUPLE_ATTR_TYPES = new AttrType[3];
+    static {
+        META_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
+        META_TUPLE_ATTR_TYPES[1] = new AttrType(AttrType.attrInteger);
+        META_TUPLE_ATTR_TYPES[2] = new AttrType(AttrType.attrInteger);
+    }
+    private static final FldSpec[] META_TUPLE_PROJ_LIST = new FldSpec[META_TUPLE_ATTR_TYPES.length];
+    static {
+        IntStream.range(0, META_TUPLE_PROJ_LIST.length).forEach(i -> META_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
+    }
+
+    private static final AttrType[] STATE_TUPLE_ATTR_TYPES = new AttrType[4];
+    static {
+        STATE_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
+        STATE_TUPLE_ATTR_TYPES[1] = new AttrType(AttrType.attrInteger);
+        STATE_TUPLE_ATTR_TYPES[2] = new AttrType(AttrType.attrVector100D);
+        STATE_TUPLE_ATTR_TYPES[3] = new AttrType(AttrType.attrInteger);
+    }
+    private static final FldSpec[] STATE_TUPLE_PROJ_LIST = new FldSpec[STATE_TUPLE_ATTR_TYPES.length];
+    static {
+        IntStream.range(0, STATE_TUPLE_PROJ_LIST.length).forEach(i -> STATE_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
+    }
 
     /**
      * Create LSHF Index class
@@ -74,25 +89,14 @@ public class LSHFIndex
 
         // Store Layer States to disk
 
-        LayerState = new Heapfile(layerState);
+        Heapfile LayerState = new Heapfile(LAYER_STATE_HEAPFILE_NAME);
 
         // States to store for each Layer.
         // int: LayerNumber, int: HashNumber, 100DVector: HashRandom_Vector, int: HashShift
         Tuple temp = new Tuple();
 
-        short numFlds = 4;
-        AttrType[] attrTypes = new AttrType[numFlds];
-        short[] strsizes = new short[numFlds];
-
-
-        // Define Attr types.
-        attrTypes[0] = new AttrType(AttrType.attrInteger);
-        attrTypes[1] = new AttrType(AttrType.attrInteger);
-        attrTypes[2] = new AttrType(AttrType.attrVector100D);
-        attrTypes[3] = new AttrType(AttrType.attrInteger);
-
         // Set tuple header.
-        temp.setHdr(numFlds, attrTypes, strsizes);
+        temp.setHdr((short) STATE_TUPLE_ATTR_TYPES.length, STATE_TUPLE_ATTR_TYPES, new short[0]);
 
         for(int i = 0; i< numLayers; i++)
         {
@@ -115,17 +119,10 @@ public class LSHFIndex
 
         // Now we store layer meta data to another heap file layerMetaData
         // No. Layers, No. Hashes per layer, Bin width.
-        LayerMetaData = new Heapfile(layerMetaData);
+        Heapfile LayerMetaData = new Heapfile(LAYER_METADATA_HEAPFILE_NAME);
         Tuple temp2 = new Tuple();
 
-        numFlds = 3;
-        attrTypes = new AttrType[numFlds];
-        attrTypes[0] = new AttrType(AttrType.attrInteger);
-        attrTypes[1] = new AttrType(AttrType.attrInteger);
-        attrTypes[2] = new AttrType(AttrType.attrInteger);
-        strsizes = new short[numFlds];
-
-        temp2.setHdr(numFlds, attrTypes, strsizes);
+        temp2.setHdr((short) META_TUPLE_ATTR_TYPES.length, META_TUPLE_ATTR_TYPES, new short[0]);
 
         temp2.setIntFld(1,this.numLayers);
         temp2.setIntFld(2,this.noOfHashFunctionsPerLayer);
@@ -144,33 +141,35 @@ public class LSHFIndex
      *
      * This constructor is to restore an existing LSHF index with its randomized vectors and shifts.
     * */
-    public LSHFIndex(Heapfile LayerStateFile, Heapfile MetaDataFile)
+    public LSHFIndex()
             throws
             InvalidTupleSizeException,
             IOException,
-            FieldNumberOutOfBoundException,
-            HFDiskMgrException,
-            HFException,
-            HFBufMgrException
-    {
+            FieldNumberOutOfBoundException, HFDiskMgrException, HFException, HFBufMgrException, InvalidRelation, FileScanException, TupleUtilsException, PageNotReadException, UnknowAttrType, PredEvalException, WrongPermat, JoinsException, InvalidTypeException {
 
-        Scan metaScan = MetaDataFile.openScan();
-        Scan stateScan = LayerStateFile.openScan();
+        FileScan metaScan = new FileScan(LAYER_METADATA_HEAPFILE_NAME,
+                META_TUPLE_ATTR_TYPES,
+                new short[0],
+                (short) META_TUPLE_ATTR_TYPES.length,
+                META_TUPLE_ATTR_TYPES.length,
+                META_TUPLE_PROJ_LIST,
+                null);
+
+        FileScan stateScan = new FileScan(LAYER_STATE_HEAPFILE_NAME,
+                STATE_TUPLE_ATTR_TYPES,
+                new short[0],
+                (short) STATE_TUPLE_ATTR_TYPES.length,
+                STATE_TUPLE_ATTR_TYPES.length,
+                STATE_TUPLE_PROJ_LIST,
+                null);
+
         RID rid = new RID();
-        Tuple temp = new Tuple();
+        Tuple temp = metaScan.get_next();
 
         // Scan the metadata file and setup the structure of Layers and hashes.
-        temp = metaScan.getNext(rid);
-        if (temp == null)
-        {
-            System.out.println ("No such RID");
-        }
-        else
-        {
-            this.numLayers = temp.getIntFld(1);
-            this.noOfHashFunctionsPerLayer = temp.getIntFld(2);
-            this.binLength = temp.getIntFld(3);
-        }
+        this.numLayers = temp.getIntFld(1);
+        this.noOfHashFunctionsPerLayer = temp.getIntFld(2);
+        this.binLength = temp.getIntFld(3);
 
         this.layers  = new Layer[this.numLayers];
         for (int i = 0; i < this.numLayers; i++)
@@ -180,16 +179,9 @@ public class LSHFIndex
             int[] shifts = new int[this.noOfHashFunctionsPerLayer];
             for (int j = 0; j < this.noOfHashFunctionsPerLayer; j++)
             {
-                temp = stateScan.getNext(rid);
-                if (temp == null)
-                {
-                    System.out.println ("No such RID");
-                }
-                else
-                {
-                    projVectors[j] = temp.get100DVectFld(3);
-                    shifts[j] = temp.getIntFld(4);
-                }
+                temp = stateScan.get_next();
+                projVectors[j] = temp.get100DVectFld(3);
+                shifts[j] = temp.getIntFld(4);
             }
 
             // Initialize layer[i] with the new values.
@@ -209,11 +201,7 @@ public class LSHFIndex
         return hashValues;
     }
 
-    public void insertRecord(Vector100Dtype vector, RID rid) throws IOException,
-                                                                    HFException,
-                                                                    HFBufMgrException,
-                                                                    HFDiskMgrException,
-                                                                    Exception
+    public void insertRecord(Vector100Dtype vector, RID rid) throws Exception
     {
         String[] hashValues = getAllLayersHash(vector);
         for (int layer = 0; layer < hashValues.length; layer++)
@@ -224,7 +212,7 @@ public class LSHFIndex
         }
     }
 
-    private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid) throws IOException, Exception
+    private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid) throws Exception
     {
         Tuple tuple = new Tuple();
         tuple.setHdr((short) 2, new AttrType[]{new AttrType(AttrType.attrInteger), new AttrType(AttrType.attrInteger)}, null);
@@ -246,4 +234,17 @@ public class LSHFIndex
         }
         return binNames;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if(! (obj instanceof LSHFIndex))
+            return false;
+        LSHFIndex otherIndex = (LSHFIndex) obj;
+
+        return ((this.binLength == otherIndex.binLength) &&
+                (this.numLayers == otherIndex.numLayers) &&
+                (this.noOfHashFunctionsPerLayer == otherIndex.noOfHashFunctionsPerLayer) &&
+                (Arrays.equals(this.layers, otherIndex.layers)));
+    }
+
 }

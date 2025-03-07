@@ -3,6 +3,7 @@ package LSHFIndex;
 import global.Vector100Dtype;
 import heap.Heapfile;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Random;
 
@@ -122,5 +123,13 @@ public class Layer
     public int[] getHashShifts()
     {
         return hashShifts;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if(! (obj instanceof Layer))
+            return false;
+        Layer otherLayer = (Layer) obj;
+        return (Arrays.equals(this.hashShifts, otherLayer.hashShifts) && (Arrays.equals(this.projVectors, otherLayer.projVectors)));
     }
 }

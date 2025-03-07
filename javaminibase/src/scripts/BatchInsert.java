@@ -180,15 +180,22 @@ public class BatchInsert implements GlobalConst
         }
 
 
-        // For each 100Dvector attribute in the input
-        // init it's LSHF index with num_hashes and num_layers
-        lshfIndices = new LSHFIndex[vector_attribute_count];
-        for(int i = 0; i<vector_attribute_count; i++)
-        {
-            // Create an array of LSHF indexes
-            // The constructor should initialize each of the random attributes
-            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes);
-        }
+//            TODO - We need to create an LSHFIndex for every vector input column.
+//        However our current state preservation/restoration of LSHFIndex doesn't handle multiple indices
+//
+//        // For each 100Dvector attribute in the input
+//        // init it's LSHF index with num_hashes and num_layers
+//        lshfIndices = new LSHFIndex[vector_attribute_count];
+//        for(int i = 0; i<vector_attribute_count; i++)
+//        {
+//            // Create an array of LSHF indexes
+//            // The constructor should initialize each of the random attributes
+//            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes);
+//        }
+
+//        TODO - Remove after implementing multi LSHFIndex state preservation
+//        For now only create 1 LSHFIndex
+        new LSHFIndex(num_layers, bin_length, num_hashes);
 
         JavabaseBM.flushAllPages();
     }

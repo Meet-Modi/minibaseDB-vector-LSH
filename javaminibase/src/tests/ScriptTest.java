@@ -12,6 +12,8 @@ import scripts.BatchInsert;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -39,14 +41,18 @@ public class ScriptTest {
     public static void main(String[] args) throws Exception {
 
 //        2) PICK A TEST/TESTS. COMMENT OUT REST
+
+//        DB Independent Tests
+        testLshfIndexPreservationAndRestore();
+
 //        createNewDb();
 
-        restartOldDb();
+//        restartOldDb();
         // Reinitialize the index here.
 
 //        readHeapFile();
 //        testSortOnExistingDb();
-        testHashGeneration();
+//        testHashGeneration();
     }
 
     private static void createNewDb() throws Exception {
@@ -126,6 +132,19 @@ public class ScriptTest {
 
         uniqueAllLayerHashes.forEach(System.out::println);
         System.out.println("Unique Hashes Count - " + uniqueAllLayerHashes.size());
+    }
+
+    private static void testLshfIndexPreservationAndRestore() throws Exception {
+        String dbpath = "/tmp/"  + System.getProperty("user.name") + ".lshfPreservationTest-db";
+        Files.deleteIfExists(Paths.get(dbpath));
+        new SystemDefs(dbpath, NUMBUF,NUMBUF, "Clock");
+
+        LSHFIndex originalIndex = new LSHFIndex(3, 10, 5);
+        LSHFIndex indexFromDisk = new LSHFIndex();
+
+        if(! originalIndex.equals(indexFromDisk)) {
+            System.out.println("NOT EQUAL!!!");
+        }
     }
 
 //    TEST HELPERS

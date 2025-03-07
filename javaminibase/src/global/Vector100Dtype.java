@@ -1,5 +1,9 @@
 package global;
 
+import LSHFIndex.Layer;
+
+import java.util.Arrays;
+
 public class Vector100Dtype
 {
     public short[] vector;
@@ -40,5 +44,11 @@ public class Vector100Dtype
         return (int)Math.sqrt(sum);
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if(! (obj instanceof Vector100Dtype))
+            return false;
+        return Arrays.equals(this.vector, ((Vector100Dtype)obj).vector);
+    }
 
 }
