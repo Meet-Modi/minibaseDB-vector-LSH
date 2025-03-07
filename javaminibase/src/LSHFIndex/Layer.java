@@ -15,7 +15,6 @@ import java.util.Random;
  * num_hash_functions - hashes per layer
  * hashFunctions - array of hashfunctions
  * layer_map - a map that maps generated hash to its corresponding heapfile
- *
  */
 
 // Layer hash is an array of integers.
@@ -30,27 +29,50 @@ import java.util.Random;
 // if we use single string/int which is a concatenation of h1 and h2,
 // both the inputs will end up having the same hash 323. We do not want this.
 
-public class Layer {
+public class Layer
+{
     private Vector100Dtype[] projVectors;
     private Random random;
     private int noOfHashFunctions;
+    private int[] hashShifts;
     private int binLength;
 
 
-    public Layer(int k, int w){
+    public Layer(int k, int w)
+    {
         this.noOfHashFunctions = k;
         this.binLength = w;
         this.random = new Random();
+
         this.projVectors = setProjection100DVectors();
+
+        // Define hash shifts
+        this.hashShifts = new int[noOfHashFunctions];
+        for (int i=0; i<noOfHashFunctions; i++)
+        {
+            hashShifts[i] = random.nextInt();
+        }
+
     }
 
-    public Vector100Dtype[] setProjection100DVectors() {
+    public Layer(Vector100Dtype[] projVectors, int[] hashShifts, int binLength)
+    {
+        this.noOfHashFunctions = projVectors.length;
+        this.binLength =  binLength;
+        this.projVectors = projVectors;
+        this.hashShifts = hashShifts;
+    }
+
+    public Vector100Dtype[] setProjection100DVectors()
+    {
         projVectors = new Vector100Dtype[noOfHashFunctions];
         int max = 10000;
         int min = -10000;
-        for(int k = 0; k < noOfHashFunctions; k++){
+        for (int k = 0; k < noOfHashFunctions; k++)
+        {
             projVectors[k] = new Vector100Dtype();
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < 100; i++)
+            {
                 short randomNumber = (short) (random.nextInt(max - min + 1) + min);
                 projVectors[k].vector[i] = randomNumber;
             }
@@ -58,29 +80,47 @@ public class Layer {
         return projVectors;
     }
 
-    public int[] GetLayerHash(Vector100Dtype input) {
+    public int[] GetLayerHash(Vector100Dtype input)
+    {
         int dotProduct = 0;
         int[] hash = new int[noOfHashFunctions];
-        for(int k = 0; k < noOfHashFunctions; k++){
-            for (int i = 0; i < 100; i++) {
+        int numerator = 0;
+        for (int k = 0; k < noOfHashFunctions; k++)
+        {
+            for (int i = 0; i < 100; i++)
+            {
                 dotProduct += projVectors[k].vector[i] * input.vector[i];
             }
-            hash[k] = Math.floorDiv(dotProduct, binLength);
+            numerator = dotProduct + hashShifts[k];
+            hash[k] = Math.floorDiv(numerator, binLength);
         }
-        
+
         return hash;
     }
 
-    public String GetLayerHashAsString(Vector100Dtype input) {
+    public String GetLayerHashAsString(Vector100Dtype input)
+    {
         int[] hash = GetLayerHash(input);
         StringBuilder hashString = new StringBuilder();
-        for (int value : hash) {
+        for (int value : hash)
+        {
             hashString.append(value).append("_");
         }
         // Remove the trailing underscore
-        if (hashString.length() > 0) {
+        if (hashString.length() > 0)
+        {
             hashString.setLength(hashString.length() - 1);
         }
         return hashString.toString();
+    }
+
+    public Vector100Dtype[] getProjectionVectors()
+    {
+        return projVectors;
+    }
+
+    public int[] getHashShifts()
+    {
+        return hashShifts;
     }
 }

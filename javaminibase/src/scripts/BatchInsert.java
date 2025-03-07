@@ -23,6 +23,7 @@ public class BatchInsert implements GlobalConst
         }
 
         // get arguments
+        int bin_length = 5;
         int num_hashes = Integer.parseInt(args[0]);
         int num_layers = Integer.parseInt(args[1]);
         String dataFilePath = args[2];
@@ -190,7 +191,7 @@ public class BatchInsert implements GlobalConst
             // for the hash functions in the layer.
             // Then we store these random attributes for all the layers into a heapfile as tuples.
             // Need to figure out the details for this implementaiton in order to use the Index abstractions.
-            lshfIndices[i] = new LSHFIndex(num_layers, num_hashes);
+//            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes);
         }
 
         JavabaseBM.flushAllPages();

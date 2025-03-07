@@ -1,5 +1,6 @@
 package tests;
 
+import LSHFIndex.LSHFIndex;
 import global.AttrType;
 import global.SystemDefs;
 import global.TupleOrder;
@@ -42,7 +43,8 @@ public class ScriptTest {
         restartOldDb();
 
 //        readHeapFile();
-        testSortOnExistingDb();
+//        testSortOnExistingDb();
+        testHashGeneration();
     }
 
     private static void createNewDb() throws Exception {
@@ -92,6 +94,23 @@ public class ScriptTest {
             t = sort.get_next();
         }
 
+    }
+
+    public static void testHashGeneration() throws Exception
+    {
+        LSHFIndex testIndex = new LSHFIndex(1, 5, 5);
+        short[] vector = new short[100];
+        for (short i = 0; i < 100; i++)
+        {
+            vector[i] = 1;
+        }
+        Vector100Dtype testVector = new Vector100Dtype(vector);
+
+        String[] hashes = testIndex.getAllLayersHash(testVector);
+        for (String hash : hashes)
+        {
+            System.out.println("\nHash: " + hash);
+        }
     }
 
 //    TEST HELPERS
