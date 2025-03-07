@@ -107,9 +107,11 @@ public class ScriptTest {
         Vector100Dtype testVector = new Vector100Dtype(vector);
 
         String[] hashes = testIndex.getAllLayersHash(testVector);
+        int count = 0;
         for (String hash : hashes)
         {
-            System.out.println("\nHash: " + hash);
+            System.out.println("\nLayer"+count+": "+hash);
+            count++;
         }
     }
 
