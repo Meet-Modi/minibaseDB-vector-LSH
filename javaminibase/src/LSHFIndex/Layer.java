@@ -104,7 +104,7 @@ public class Layer
         StringBuilder hashString = new StringBuilder();
         for (int value : hash)
         {
-            hashString.append(value).append("_");
+            hashString.append(value).append(".");
         }
         // Remove the trailing underscore
         if (hashString.length() > 0)

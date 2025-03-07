@@ -98,7 +98,7 @@ public class ScriptTest {
 
     public static void testHashGeneration() throws Exception
     {
-        LSHFIndex testIndex = new LSHFIndex(1, 5, 5);
+        LSHFIndex testIndex = new LSHFIndex(3, 2, 3);
         short[] vector = new short[100];
         for (short i = 0; i < 100; i++)
         {
