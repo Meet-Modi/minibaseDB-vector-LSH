@@ -13,6 +13,8 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.stream.IntStream;
 
 import static global.GlobalConst.NUMBUF;
@@ -32,22 +34,7 @@ public class ScriptTest {
     static short num_attributes;
     static String targetVectorString = "4565 8373 27 4635 1491 6298 7433 9922 608 3908 3098 1048 9312 6420 8885 2242 5275 473 4824 766 2347 4009 5474 2706 5885 4529 2362 4247 9073 9235 5209 2376 3401 9946 2082 2997 78 1007 5763 2260 4856 7147 1830 5692 8322 908 5034 1413 526 1567 4363 7338 2412 8365 8098 2780 1302 7951 2061 6802 300 8272 8652 1225 6443 530 1004 2160 766 4723 4578 6777 8567 9665 9326 8125 5287 946 3089 5472 9485 3344 7538 1317 8692 8373 5006 5374 7018 1738 7045 8212 3542 3146 7298 9058 4077 9605 5734 1954";
     static Vector100Dtype target = new Vector100Dtype();
-    static short sortFieldNumber = 2;
-
-
-    public ScriptTest()
-            throws
-            SpaceNotAvailableException,
-            FieldNumberOutOfBoundException,
-            HFDiskMgrException,
-            HFException,
-            HFBufMgrException,
-            InvalidTupleSizeException,
-            InvalidSlotNumberException,
-            IOException,
-            InvalidTypeException
-    {
-    }
+    static short vectorFieldNumber = 2;
 
     public static void main(String[] args) throws Exception {
 
@@ -95,7 +82,7 @@ public class ScriptTest {
         prepareTargetVectorTypeFromString();
         FileScan hfScan = perpareAndGetHeapFileScan();
 
-        Sort sort = new Sort(attrTypes, num_attributes, string_lengths, hfScan, sortFieldNumber, new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
+        Sort sort = new Sort(attrTypes, num_attributes, string_lengths, hfScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
         Tuple t = sort.get_next();
 
         Tuple targetTuple = new Tuple();
@@ -103,7 +90,7 @@ public class ScriptTest {
         targetTuple.set100DVectFld(1, target);
 
         while(t != null) {
-            int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, t, sortFieldNumber);
+            int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, t, vectorFieldNumber);
             System.out.println("\nDistance from Target = " + distance);
             printTuple(t);
             t = sort.get_next();
@@ -114,47 +101,31 @@ public class ScriptTest {
     public static void testHashGeneration() throws Exception
     {
         int nLayers = 1;
-        int nHashes = 2;
-        int binLength = 500000;
+        int nHashes = 5;
+        int binLength = 1_000_000_000;
         LSHFIndex testIndex = new LSHFIndex(nLayers, binLength, nHashes);
 
-        // Test if same vector hases to the same values.
-        short[] vector = new short[100];
-        for (short i = 0; i < 100; i++)
-        {
-            vector[i] = 1;
-        }
-        Vector100Dtype testVector = new Vector100Dtype(vector);
+        FileScan hfScan = perpareAndGetHeapFileScan();
+        Tuple t = hfScan.get_next();
+        HashSet<String> uniqueAllLayerHashes = new HashSet<>();
+        while(t != null) {
+            Vector100Dtype vector = new Vector100Dtype(t.get100DVectFld(vectorFieldNumber).vector);
 
-        String[] hashes = testIndex.getAllLayersHash(testVector);
-        String[] hashes2 = testIndex.getAllLayersHash(testVector);
-        for (int i = 0; i < nLayers; i++)
-        {
-            if(hashes[i].equals(hashes2[i]))
-            {
-                System.out.println("Layer"+i+": match");
+            String[] hash1 = testIndex.getAllLayersHash(vector);
+            String[] hash2 = testIndex.getAllLayersHash(vector);
+            if(! Arrays.equals(hash1, hash2)) {
+                System.out.println("HASH MISMATCH!!");
+                System.out.println("Hash 1 - " + hash1);
+                System.out.println("Hash 1 - " + hash2);
+                return;
             }
-            else
-            {
-                System.out.println("Layer"+i+": mismatch");
-            }
+
+            uniqueAllLayerHashes.add(String.join("_", hash1));
+            t = hfScan.get_next();
         }
 
-        // Count number of unique hashes generated for 10 different vectors.
-        for (short i = 0; i < 10; i++)
-        {
-            for (short j = 0; j < 100; j++)
-            {
-                vector[j] = i;
-            }
-            testVector = new Vector100Dtype(vector);
-            hashes = testIndex.getAllLayersHash(testVector);
-
-            for(String hash:hashes)
-            {
-                System.out.println("Vector"+i+": "+hash);
-            }
-        }
+        uniqueAllLayerHashes.forEach(System.out::println);
+        System.out.println("Unique Hashes Count - " + uniqueAllLayerHashes.size());
     }
 
 //    TEST HELPERS
