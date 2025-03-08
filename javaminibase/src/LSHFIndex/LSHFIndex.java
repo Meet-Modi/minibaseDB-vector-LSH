@@ -218,7 +218,7 @@ public class LSHFIndex
         tuple.setHdr((short) 2, new AttrType[]{new AttrType(AttrType.attrInteger), new AttrType(AttrType.attrInteger)}, null);
         tuple.setIntFld(1, rid.pageNo.pid);
         tuple.setIntFld(2, rid.slotNo);
-        heapFile.insertRecord(tuple.returnTupleByteArray());
+        heapFile.insertRecord(tuple.getTupleByteArray());
     }
 
     public List<String> getBinHeapFileNames(Vector100Dtype vector) throws IOException
@@ -263,7 +263,8 @@ public class LSHFIndex
         AttrType[] attrTypes = new AttrType[2];
         attrTypes[0] = new AttrType(AttrType.attrInteger);
         attrTypes[1] = new AttrType(AttrType.attrInteger);
-        tempBinTuple.setHdr(numBinAttributes, attrTypes, null);
+        short[] stringSizes = new short[0];
+        tempBinTuple.setHdr(numBinAttributes, attrTypes, stringSizes);
 
         Tuple tempDataFileTuple = new Tuple();
         tempDataFileTuple.setHdr(numDataFileAttributes, dataFileAttrTypes, dataFileStringSizes);
