@@ -235,6 +235,54 @@ public class LSHFIndex
         return binNames;
     }
 
+    public Heapfile Union (Vector100Dtype input)
+            throws
+            IOException,
+            InvalidTupleSizeException,
+            InvalidTypeException,
+            HFDiskMgrException,
+            HFException,
+            HFBufMgrException,
+            SpaceNotAvailableException,
+            InvalidSlotNumberException
+    {
+        String[] hashValues = getBinHeapFileNames(input).toArray(new String[0]);
+
+        short num_attributes = 2;
+        RID rid = new RID();
+        Scan scan = null;
+
+        // Tuple Setup
+        // The bin Heap files have record ids of the vectors from the original data heapfile.
+        // attr[0] - pageID
+        // attr[1] - slotNo
+        Tuple temp = new Tuple();
+        AttrType [] attrTypes = new AttrType[2];
+        attrTypes[0] = new AttrType(AttrType.attrInteger);
+        attrTypes[1] = new AttrType(AttrType.attrInteger);
+
+        temp.setHdr(num_attributes, attrTypes, null);
+        Heapfile unionDump = new Heapfile("unionDump");
+        for (String hash :  hashValues)
+        {
+            Heapfile hashBinFile = new Heapfile(hash);
+            scan = hashBinFile.openScan();
+            boolean done = false;
+            while (!done)
+            {
+                temp = scan.getNext(rid);
+                if(temp == null)
+                {
+                    done = true;
+                    break;
+                }
+                unionDump.insertRecord(temp.getTupleByteArray());
+            }
+        }
+
+        return unionDump;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if(! (obj instanceof LSHFIndex))
