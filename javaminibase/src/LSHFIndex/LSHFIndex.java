@@ -26,68 +26,88 @@ public class LSHFIndex
 
     private int numLayers;
     private int noOfHashFunctionsPerLayer;
+    private int attributeColumnNumber;
+    private int noOfHashFunctions;
 
 
     private Layer[] layers; // L
     private int binLength; // k
 
-    private static final String LAYER_STATE_HEAPFILE_NAME =  "LayerState";
+    private static final String LAYER_STATE_HEAPFILE_NAME = "LayerState";
     private static final String LAYER_METADATA_HEAPFILE_NAME = "LayerMetaData";
 
     public static final String UNION_DUMP_HEAP_FILE_NAME = "unionDump";
 
     private static final AttrType[] META_TUPLE_ATTR_TYPES = new AttrType[3];
-    static {
+
+    static
+    {
         META_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
         META_TUPLE_ATTR_TYPES[1] = new AttrType(AttrType.attrInteger);
         META_TUPLE_ATTR_TYPES[2] = new AttrType(AttrType.attrInteger);
     }
+
     private static final FldSpec[] META_TUPLE_PROJ_LIST = new FldSpec[META_TUPLE_ATTR_TYPES.length];
-    static {
-        IntStream.range(0, META_TUPLE_PROJ_LIST.length).forEach(i -> META_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
+
+    static
+    {
+        IntStream.range(0, META_TUPLE_PROJ_LIST.length).forEach(i -> META_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
     }
 
     private static final AttrType[] STATE_TUPLE_ATTR_TYPES = new AttrType[4];
-    static {
+
+    static
+    {
         STATE_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
         STATE_TUPLE_ATTR_TYPES[1] = new AttrType(AttrType.attrInteger);
         STATE_TUPLE_ATTR_TYPES[2] = new AttrType(AttrType.attrVector100D);
         STATE_TUPLE_ATTR_TYPES[3] = new AttrType(AttrType.attrInteger);
     }
+
     private static final FldSpec[] STATE_TUPLE_PROJ_LIST = new FldSpec[STATE_TUPLE_ATTR_TYPES.length];
-    static {
-        IntStream.range(0, STATE_TUPLE_PROJ_LIST.length).forEach(i -> STATE_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
+
+    static
+    {
+        IntStream.range(0, STATE_TUPLE_PROJ_LIST.length).forEach(i -> STATE_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
     }
 
     private static final AttrType[] BIN_TUPLE_ATTR_TYPES = new AttrType[2];
-    static {
+
+    static
+    {
         BIN_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
         BIN_TUPLE_ATTR_TYPES[1] = new AttrType(AttrType.attrInteger);
     }
+
     private static final FldSpec[] BIN_TUPLE_PROJ_LIST = new FldSpec[BIN_TUPLE_ATTR_TYPES.length];
-    static {
-        IntStream.range(0, BIN_TUPLE_PROJ_LIST.length).forEach(i -> BIN_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
+
+    static
+    {
+        IntStream.range(0, BIN_TUPLE_PROJ_LIST.length).forEach(i -> BIN_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
     }
 
     /**
      * Create LSHF Index class
      *
-     * @param Layers No of layers. Input parameter.
-     * @param binLength bin length
+     * @param Layers                No of layers. Input parameter.
+     * @param binLength             bin length
      * @param hashFunctionsPerLayer No of hash functions per layer. Input parameter.
      */
-    public LSHFIndex(int Layers, int binLength, int hashFunctionsPerLayer) throws HFDiskMgrException,
-                                                                                  HFException,
-                                                                                  HFBufMgrException,
-                                                                                  IOException,
-                                                                                  SpaceNotAvailableException,
-                                                                                  FieldNumberOutOfBoundException,
-                                                                                  InvalidTupleSizeException,
-                                                                                  InvalidSlotNumberException,
-                                                                                  InvalidTypeException
+    public LSHFIndex(int Layers, int binLength, int hashFunctionsPerLayer, int attributeColumnNumber)
+            throws
+            HFDiskMgrException,
+            HFException,
+            HFBufMgrException,
+            IOException,
+            SpaceNotAvailableException,
+            FieldNumberOutOfBoundException,
+            InvalidTupleSizeException,
+            InvalidSlotNumberException,
+            InvalidTypeException
 
     {
         // Meta Data
+        this.attributeColumnNumber = attributeColumnNumber;
         this.numLayers = Layers;
         this.binLength = binLength;
         this.noOfHashFunctionsPerLayer = hashFunctionsPerLayer;
@@ -102,7 +122,7 @@ public class LSHFIndex
 
         // Store Layer States to disk
 
-        Heapfile LayerState = new Heapfile(LAYER_STATE_HEAPFILE_NAME);
+        Heapfile LayerState = new Heapfile(LAYER_STATE_HEAPFILE_NAME+Integer.toString(attributeColumnNumber));
 
         // States to store for each Layer.
         // int: LayerNumber, int: HashNumber, 100DVector: HashRandom_Vector, int: HashShift
@@ -111,17 +131,17 @@ public class LSHFIndex
         // Set tuple header.
         temp.setHdr((short) STATE_TUPLE_ATTR_TYPES.length, STATE_TUPLE_ATTR_TYPES, new short[0]);
 
-        for(int i = 0; i< numLayers; i++)
+        for (int i = 0; i < numLayers; i++)
         {
             // Get this layer's proj vectors and hashShifts.
             Vector100Dtype[] projVectors = layers[i].getProjectionVectors();
             int[] shifts = layers[i].getHashShifts();
 
             // Iterate over all the hashfunctions in the layer.
-            for(int j=0; j< noOfHashFunctionsPerLayer; j++)
+            for (int j = 0; j < noOfHashFunctionsPerLayer; j++)
             {
-                temp.setIntFld(1,i);
-                temp.setIntFld(2,j);
+                temp.setIntFld(1, i);
+                temp.setIntFld(2, j);
                 temp.set100DVectFld(3, projVectors[j]);
                 temp.setIntFld(4, shifts[j]);
 
@@ -132,35 +152,48 @@ public class LSHFIndex
 
         // Now we store layer meta data to another heap file layerMetaData
         // No. Layers, No. Hashes per layer, Bin width.
-        Heapfile LayerMetaData = new Heapfile(LAYER_METADATA_HEAPFILE_NAME);
+        Heapfile LayerMetaData = new Heapfile(LAYER_METADATA_HEAPFILE_NAME+Integer.toString(attributeColumnNumber));
         Tuple temp2 = new Tuple();
 
         temp2.setHdr((short) META_TUPLE_ATTR_TYPES.length, META_TUPLE_ATTR_TYPES, new short[0]);
 
-        temp2.setIntFld(1,this.numLayers);
-        temp2.setIntFld(2,this.noOfHashFunctionsPerLayer);
-        temp2.setIntFld(3,this.binLength);
+        temp2.setIntFld(1, this.numLayers);
+        temp2.setIntFld(2, this.noOfHashFunctionsPerLayer);
+        temp2.setIntFld(3, this.binLength);
 
         LayerMetaData.insertRecord(temp2.getTupleByteArray());
 
     }
 
     /**
-    * LayerStateFile
+     * LayerStateFile
      * int:LayerNumber, int:HashNumber, 100DVector:HashRandom_Vector, int:HashShift
-     *
+     * <p>
      * MetaDataFile
      * int: numLayers, int: noOfHashFunctionsPerLayer, int:binLength
-     *
+     * <p>
      * This constructor is to restore an existing LSHF index with its randomized vectors and shifts.
-    * */
+     */
     public LSHFIndex()
             throws
             InvalidTupleSizeException,
             IOException,
-            FieldNumberOutOfBoundException, HFDiskMgrException, HFException, HFBufMgrException, InvalidRelation, FileScanException, TupleUtilsException, PageNotReadException, UnknowAttrType, PredEvalException, WrongPermat, JoinsException, InvalidTypeException {
+            FieldNumberOutOfBoundException,
+            HFDiskMgrException,
+            HFException,
+            HFBufMgrException,
+            InvalidRelation,
+            FileScanException,
+            TupleUtilsException,
+            PageNotReadException,
+            UnknowAttrType,
+            PredEvalException,
+            WrongPermat,
+            JoinsException,
+            InvalidTypeException
+    {
 
-        FileScan metaScan = new FileScan(LAYER_METADATA_HEAPFILE_NAME,
+        FileScan metaScan = new FileScan(LAYER_METADATA_HEAPFILE_NAME+Integer.toString(attributeColumnNumber),
                 META_TUPLE_ATTR_TYPES,
                 new short[0],
                 (short) META_TUPLE_ATTR_TYPES.length,
@@ -168,7 +201,7 @@ public class LSHFIndex
                 META_TUPLE_PROJ_LIST,
                 null);
 
-        FileScan stateScan = new FileScan(LAYER_STATE_HEAPFILE_NAME,
+        FileScan stateScan = new FileScan(LAYER_STATE_HEAPFILE_NAME+Integer.toString(attributeColumnNumber),
                 STATE_TUPLE_ATTR_TYPES,
                 new short[0],
                 (short) STATE_TUPLE_ATTR_TYPES.length,
@@ -184,7 +217,7 @@ public class LSHFIndex
         this.noOfHashFunctionsPerLayer = temp.getIntFld(2);
         this.binLength = temp.getIntFld(3);
 
-        this.layers  = new Layer[this.numLayers];
+        this.layers = new Layer[this.numLayers];
         for (int i = 0; i < this.numLayers; i++)
         {
 
@@ -198,7 +231,7 @@ public class LSHFIndex
             }
 
             // Initialize layer[i] with the new values.
-            layers[i] = new Layer(projVectors,shifts, binLength);
+            layers[i] = new Layer(projVectors, shifts, binLength);
         }
 
     }
@@ -214,7 +247,9 @@ public class LSHFIndex
         return hashValues;
     }
 
-    public void insertRecord(Vector100Dtype vector, RID rid) throws Exception
+    public void insertRecord(Vector100Dtype vector, RID rid)
+            throws
+            Exception
     {
         String[] hashValues = getAllLayersHash(vector);
         for (int layer = 0; layer < hashValues.length; layer++)
@@ -225,11 +260,14 @@ public class LSHFIndex
         }
     }
 
-    public static String generateBinHeapFileName(int layer, String hash) {
+    public static String generateBinHeapFileName(int layer, String hash)
+    {
         return "layer-" + layer + "-bin-" + hash;
     }
 
-    private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid) throws Exception
+    private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid)
+            throws
+            Exception
     {
         Tuple tuple = new Tuple();
         tuple.setHdr((short) 2, BIN_TUPLE_ATTR_TYPES, null);
@@ -238,18 +276,24 @@ public class LSHFIndex
         heapFile.insertRecord(tuple.getTupleByteArray());
     }
 
-    public List<String> getBinHeapFileNames(Vector100Dtype vector) throws IOException
+    public List<String> getBinHeapFileNames(Vector100Dtype vector)
+            throws
+            IOException
     {
 
         String[] hashValues = getAllLayersHash(vector);
         List<String> binNames = new ArrayList<>();
-        for (int layer = 0; layer < hashValues.length; layer++) {
+        for (int layer = 0; layer < hashValues.length; layer++)
+        {
             binNames.add(generateBinHeapFileName(layer, hashValues[layer]));
         }
         return binNames;
     }
 
-    public Heapfile union (Vector100Dtype inputVector, AttrType[] dataFileAttrTypes, short numDataFileAttributes, short[] dataFileStringSizes, Heapfile dataFile) throws Exception {
+    public Heapfile union(Vector100Dtype inputVector, AttrType[] dataFileAttrTypes, short numDataFileAttributes, short[] dataFileStringSizes, Heapfile dataFile)
+            throws
+            Exception
+    {
         List<String> hashValues = getBinHeapFileNames(inputVector);
 
         // Tuple Setup
@@ -261,7 +305,7 @@ public class LSHFIndex
         tempDataFileTuple.setHdr(numDataFileAttributes, dataFileAttrTypes, dataFileStringSizes);
 
         Heapfile unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
-        for (String hash :  hashValues)
+        for (String hash : hashValues)
         {
             FileScan binScan = new FileScan(hash, BIN_TUPLE_ATTR_TYPES, new short[0], (short) BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_PROJ_LIST, null);
             Tuple binTuple = binScan.get_next();
@@ -273,7 +317,7 @@ public class LSHFIndex
                 // dump the tuple into unionDump
                 unionDump.insertRecord(
                         dataFile.getRecord(new RID(new PageId(binTuple.getIntFld(1)), binTuple.getIntFld(2)))
-                        .getTupleByteArray()
+                                .getTupleByteArray()
                 );
 
                 binTuple = binScan.get_next();
@@ -283,10 +327,10 @@ public class LSHFIndex
     }
 
 
-
     @Override
-    public boolean equals(Object obj) {
-        if(! (obj instanceof LSHFIndex))
+    public boolean equals(Object obj)
+    {
+        if (!(obj instanceof LSHFIndex))
             return false;
         LSHFIndex otherIndex = (LSHFIndex) obj;
 

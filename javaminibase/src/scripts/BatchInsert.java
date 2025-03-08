@@ -137,24 +137,32 @@ public class BatchInsert implements GlobalConst
 //
 //        // For each 100Dvector attribute in the input
 //        // init it's LSHF index with num_hashes and num_layers
-//        lshfIndices = new LSHFIndex[vector_attribute_count];
-//        for(int i = 0; i<vector_attribute_count; i++)
-//        {
-//            // Create an array of LSHF indexes
-//            // The constructor should initialize each of the random attributes
-//            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes);
-//        }
-
-//        TODO - Remove after implementing multi LSHFIndex state preservation
-//        For now only create 1 LSHFIndex
-        LSHFIndex index = new LSHFIndex(num_layers, bin_length, num_hashes);
-        int firstVectorFieldNumber = 0;
-        for(int i=0; i < attrTypes.length; i++) {
-            if(attrTypes[i].attrType == AttrType.attrVector100D) {
-                firstVectorFieldNumber = i + 1;
-                break;
+        lshfIndices = new LSHFIndex[vector_attribute_count];
+        for(int i = 0; i<vector_attribute_count; i++)
+        {
+            // Create an array of LSHF indexes
+            // The constructor should initialize each of the random attributes
+            for(int j=0; j<num_attributes; j++)
+            {
+                // iterate over attrType array and create LSHFidices for 100DVector attribute columns.
+                if (attrTypes[j].attrType == AttrType.attrVector100D)
+                {
+                    lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes,j+1);
+                }
             }
+
         }
+
+////        TODO - Remove after implementing multi LSHFIndex state preservation
+////        For now only create 1 LSHFIndex
+//        LSHFIndex index = new LSHFIndex(num_layers, bin_length, num_hashes);
+//        int firstVectorFieldNumber = 0;
+//        for(int i=0; i < attrTypes.length; i++) {
+//            if(attrTypes[i].attrType == AttrType.attrVector100D) {
+//                firstVectorFieldNumber = i + 1;
+//                break;
+//            }
+//        }
 
         while (true)
         {
