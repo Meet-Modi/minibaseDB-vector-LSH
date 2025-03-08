@@ -207,9 +207,13 @@ public class LSHFIndex
         for (int layer = 0; layer < hashValues.length; layer++)
         {
             String hashValue = hashValues[layer];
-            Heapfile heapFile = new Heapfile("layer-" + layer + "-bin-" + hashValue);
+            Heapfile heapFile = new Heapfile(generateBinHeapFileName(layer, hashValue));
             insertRIDIntoHeapfile(heapFile, rid);
         }
+    }
+
+    public static String generateBinHeapFileName(int layer, String hash) {
+        return "layer-" + layer + "-bin-" + hash;
     }
 
     private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid) throws Exception
@@ -226,11 +230,8 @@ public class LSHFIndex
 
         String[] hashValues = getAllLayersHash(vector);
         List<String> binNames = new ArrayList<>();
-        for (int layer = 0; layer < hashValues.length; layer++)
-        {
-            String hashValue = hashValues[layer];
-            String heapFileName = "layer-" + layer + "-bin-" + hashValue;
-            binNames.add(heapFileName);
+        for (int layer = 0; layer < hashValues.length; layer++) {
+            binNames.add(generateBinHeapFileName(layer, hashValues[layer]));
         }
         return binNames;
     }

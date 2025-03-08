@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.stream.IntStream;
 
@@ -28,6 +29,8 @@ public class ScriptTest {
     static String INPUT_FILE_NAME = Paths.get(INPUT_FILE_PATH).getFileName().toString();
     static String DB_NAME = "batchInsertTest1";
     static int VECTOR_lENGTH = 100;
+    static String NUM_HASHES = "5";
+    static String NUM_LAYERS = "3";
 
 
     static AttrType[] attrTypes;
@@ -43,20 +46,21 @@ public class ScriptTest {
 //        2) PICK A TEST/TESTS. COMMENT OUT REST
 
 //        DB Independent Tests
-        testLshfIndexPreservationAndRestore();
+//        testLshfIndexPreservationAndRestore();
 
 //        createNewDb();
 
-//        restartOldDb();
+        restartOldDb();
         // Reinitialize the index here.
 
 //        readHeapFile();
 //        testSortOnExistingDb();
 //        testHashGeneration();
+        testWriteDuringTupleHashAndReadBins();
     }
 
     private static void createNewDb() throws Exception {
-        BatchInsert.main(new String[]{"2", "2", INPUT_FILE_PATH, DB_NAME});
+        BatchInsert.main(new String[]{NUM_HASHES, NUM_LAYERS, INPUT_FILE_PATH, DB_NAME});
 
         Heapfile hf = new Heapfile(INPUT_FILE_NAME);
         System.out.println("Record Count in Heap File = " + hf.getRecCnt());
@@ -144,6 +148,50 @@ public class ScriptTest {
 
         if(! originalIndex.equals(indexFromDisk)) {
             System.out.println("NOT EQUAL!!!");
+        }
+    }
+
+    private static void testWriteDuringTupleHashAndReadBins() throws Exception {
+        LSHFIndex index = new LSHFIndex();
+        FileScan hfScan = perpareAndGetHeapFileScan();
+
+        int dataHeapFileRecordSize = 0;
+
+        Tuple t = hfScan.get_next();
+        HashMap<Integer, HashSet<String>> layerToUniqueHashesMap = new HashMap<>();
+
+        while(t != null) {
+            dataHeapFileRecordSize++;
+
+            String[] hashes = index.getAllLayersHash(t.get100DVectFld(vectorFieldNumber));
+            IntStream.range(0, hashes.length).forEach(i -> {
+                if(! layerToUniqueHashesMap.containsKey(i)) {
+                    layerToUniqueHashesMap.put(i, new HashSet<>());
+                }
+                layerToUniqueHashesMap.get(i).add(hashes[i]);
+            });
+
+            t = hfScan.get_next();
+        }
+
+        HashMap<Integer, Integer> layerToNumberOfRecords = new HashMap<>();
+
+        IntStream.range(0, Integer.parseInt(NUM_LAYERS)).forEach(i -> {
+            layerToUniqueHashesMap.get(i).forEach(hash -> {
+                try {
+                    Heapfile hf = new Heapfile(LSHFIndex.generateBinHeapFileName(i, hash));
+                    layerToNumberOfRecords.put(i, layerToNumberOfRecords.getOrDefault(i, 0) + hf.getRecCnt());
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        });
+
+        for(Integer i : layerToNumberOfRecords.keySet()) {
+            if(layerToNumberOfRecords.get(i) != dataHeapFileRecordSize) {
+                System.out.println("MISMATCH!! dataHeapFileRecordSize = " + dataHeapFileRecordSize +
+                        " but layer " + i + "has only " + layerToNumberOfRecords.get(i) + " records");
+            }
         }
     }
 

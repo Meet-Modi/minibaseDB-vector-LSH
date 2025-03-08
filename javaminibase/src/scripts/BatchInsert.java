@@ -6,6 +6,8 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.stream.IntStream;
 
 import global.*;
 import heap.*;
@@ -15,7 +17,7 @@ import static global.SystemDefs.JavabaseBM;
 
 public class BatchInsert implements GlobalConst
 {
-    public static void main(String[] args) throws IOException, InvalidTupleSizeException, InvalidTypeException, SpaceNotAvailableException, HFDiskMgrException, HFException, InvalidSlotNumberException, HFBufMgrException, FieldNumberOutOfBoundException, PageNotFoundException, HashOperationException, BufMgrException, PagePinnedException, PageUnpinnedException {
+    public static void main(String[] args) throws Exception {
         if (args.length != 4)
         {
             System.err.println("Batch insert requires 4 arguments.");
@@ -23,7 +25,7 @@ public class BatchInsert implements GlobalConst
         }
 
         // get arguments
-        int bin_length = 5;
+        int bin_length = 1_000_000_000;
         int num_hashes = Integer.parseInt(args[0]);
         int num_layers = Integer.parseInt(args[1]);
         String dataFilePath = args[2];
@@ -129,6 +131,31 @@ public class BatchInsert implements GlobalConst
         RID rid = new RID();
         String tuple_value;
         boolean end_of_file = false;
+
+        //            TODO - We need to create an LSHFIndex for every vector input column.
+//        However our current state preservation/restoration of LSHFIndex doesn't handle multiple indices
+//
+//        // For each 100Dvector attribute in the input
+//        // init it's LSHF index with num_hashes and num_layers
+//        lshfIndices = new LSHFIndex[vector_attribute_count];
+//        for(int i = 0; i<vector_attribute_count; i++)
+//        {
+//            // Create an array of LSHF indexes
+//            // The constructor should initialize each of the random attributes
+//            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes);
+//        }
+
+//        TODO - Remove after implementing multi LSHFIndex state preservation
+//        For now only create 1 LSHFIndex
+        LSHFIndex index = new LSHFIndex(num_layers, bin_length, num_hashes);
+        int firstVectorFieldNumber = 0;
+        for(int i=0; i < attrTypes.length; i++) {
+            if(attrTypes[i].attrType == AttrType.attrVector100D) {
+                firstVectorFieldNumber = i + 1;
+                break;
+            }
+        }
+
         while (true)
         {
             // Create tuple for input into heapfile.
@@ -177,25 +204,9 @@ public class BatchInsert implements GlobalConst
             // If we reach end of file while reading mid tuple, we break.
             if (end_of_file) break;
             rid = file.insertRecord(t.getTupleByteArray());
+
+            index.insertRecord(t.get100DVectFld(firstVectorFieldNumber), rid);
         }
-
-
-//            TODO - We need to create an LSHFIndex for every vector input column.
-//        However our current state preservation/restoration of LSHFIndex doesn't handle multiple indices
-//
-//        // For each 100Dvector attribute in the input
-//        // init it's LSHF index with num_hashes and num_layers
-//        lshfIndices = new LSHFIndex[vector_attribute_count];
-//        for(int i = 0; i<vector_attribute_count; i++)
-//        {
-//            // Create an array of LSHF indexes
-//            // The constructor should initialize each of the random attributes
-//            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes);
-//        }
-
-//        TODO - Remove after implementing multi LSHFIndex state preservation
-//        For now only create 1 LSHFIndex
-        new LSHFIndex(num_layers, bin_length, num_hashes);
 
         JavabaseBM.flushAllPages();
     }
