@@ -37,6 +37,7 @@ public class ScriptTest {
     static FldSpec[] projlist;
     static short[] string_lengths;
     static short num_attributes;
+
     static String targetVectorString = "4565 8373 27 4635 1491 6298 7433 9922 608 3908 3098 1048 9312 6420 8885 2242 5275 473 4824 766 2347 4009 5474 2706 5885 4529 2362 4247 9073 9235 5209 2376 3401 9946 2082 2997 78 1007 5763 2260 4856 7147 1830 5692 8322 908 5034 1413 526 1567 4363 7338 2412 8365 8098 2780 1302 7951 2061 6802 300 8272 8652 1225 6443 530 1004 2160 766 4723 4578 6777 8567 9665 9326 8125 5287 946 3089 5472 9485 3344 7538 1317 8692 8373 5006 5374 7018 1738 7045 8212 3542 3146 7298 9058 4077 9605 5734 1954";
     static Vector100Dtype target = new Vector100Dtype();
     static short vectorFieldNumber = 2;
@@ -56,7 +57,8 @@ public class ScriptTest {
 //        readHeapFile();
 //        testSortOnExistingDb();
 //        testHashGeneration();
-        testWriteDuringTupleHashAndReadBins();
+//        testWriteDuringTupleHashAndReadBins();
+        testIndexUnion();
     }
 
     private static void createNewDb() throws Exception {
@@ -192,6 +194,32 @@ public class ScriptTest {
                 System.out.println("MISMATCH!! dataHeapFileRecordSize = " + dataHeapFileRecordSize +
                         " but layer " + i + "has only " + layerToNumberOfRecords.get(i) + " records");
             }
+        }
+    }
+
+    private static void testIndexUnion() throws Exception {
+        prepareTargetVectorTypeFromString();
+        prepareAttrTypesAndStrLengths();
+        prepareProjList();
+
+        LSHFIndex index = new LSHFIndex();
+        Heapfile unionFile = index.union(target, attrTypes, num_attributes, string_lengths, new Heapfile(INPUT_FILE_NAME));
+
+        System.out.println("Union File Record Count - " + unionFile.getRecCnt());
+
+        FileScan scan = new FileScan(LSHFIndex.UNION_DUMP_HEAP_FILE_NAME, attrTypes, string_lengths, num_attributes, num_attributes, projlist, null);
+        Sort sort = new Sort(attrTypes, num_attributes, string_lengths, scan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
+
+        Tuple targetTuple = new Tuple();
+        targetTuple.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrVector100D)}, new short[0]);
+        targetTuple.set100DVectFld(1, target);
+
+        Tuple t = sort.get_next();
+        while(t  != null) {
+            int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, t, vectorFieldNumber);
+            System.out.println("\nDistance from Target = " + distance);
+//            printTuple(t);
+            t = sort.get_next();
         }
     }
 

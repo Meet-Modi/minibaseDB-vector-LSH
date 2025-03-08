@@ -2,6 +2,7 @@ package LSHFIndex;
 
 import bufmgr.PageNotReadException;
 import global.AttrType;
+import global.PageId;
 import global.RID;
 import global.Vector100Dtype;
 import heap.*;
@@ -33,6 +34,8 @@ public class LSHFIndex
     private static final String LAYER_STATE_HEAPFILE_NAME =  "LayerState";
     private static final String LAYER_METADATA_HEAPFILE_NAME = "LayerMetaData";
 
+    public static final String UNION_DUMP_HEAP_FILE_NAME = "unionDump";
+
     private static final AttrType[] META_TUPLE_ATTR_TYPES = new AttrType[3];
     static {
         META_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
@@ -54,6 +57,16 @@ public class LSHFIndex
     private static final FldSpec[] STATE_TUPLE_PROJ_LIST = new FldSpec[STATE_TUPLE_ATTR_TYPES.length];
     static {
         IntStream.range(0, STATE_TUPLE_PROJ_LIST.length).forEach(i -> STATE_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
+    }
+
+    private static final AttrType[] BIN_TUPLE_ATTR_TYPES = new AttrType[2];
+    static {
+        BIN_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
+        BIN_TUPLE_ATTR_TYPES[1] = new AttrType(AttrType.attrInteger);
+    }
+    private static final FldSpec[] BIN_TUPLE_PROJ_LIST = new FldSpec[BIN_TUPLE_ATTR_TYPES.length];
+    static {
+        IntStream.range(0, BIN_TUPLE_PROJ_LIST.length).forEach(i -> BIN_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
     }
 
     /**
@@ -219,7 +232,7 @@ public class LSHFIndex
     private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid) throws Exception
     {
         Tuple tuple = new Tuple();
-        tuple.setHdr((short) 2, new AttrType[]{new AttrType(AttrType.attrInteger), new AttrType(AttrType.attrInteger)}, null);
+        tuple.setHdr((short) 2, BIN_TUPLE_ATTR_TYPES, null);
         tuple.setIntFld(1, rid.pageNo.pid);
         tuple.setIntFld(2, rid.slotNo);
         heapFile.insertRecord(tuple.getTupleByteArray());
@@ -236,64 +249,34 @@ public class LSHFIndex
         return binNames;
     }
 
-    public Heapfile Union (Vector100Dtype inputVector, AttrType[] dataFileAttrTypes, short numDataFileAttributes, short[] dataFileStringSizes, Heapfile dataFile)
-            throws
-            IOException,
-            InvalidTupleSizeException,
-            InvalidTypeException,
-            HFDiskMgrException,
-            HFException,
-            HFBufMgrException,
-            SpaceNotAvailableException,
-            InvalidSlotNumberException,
-            FieldNumberOutOfBoundException
-    {
-        String[] hashValues = getBinHeapFileNames(inputVector).toArray(new String[0]);
-
-        short numBinAttributes = 2;
-        RID ridBinScan = new RID();
-        RID ridDataFile= new RID();
-        Scan binScan = null;
-        Scan dataFileScan = dataFile.openScan();
+    public Heapfile union (Vector100Dtype inputVector, AttrType[] dataFileAttrTypes, short numDataFileAttributes, short[] dataFileStringSizes, Heapfile dataFile) throws Exception {
+        List<String> hashValues = getBinHeapFileNames(inputVector);
 
         // Tuple Setup
         // The bin Heap files have record ids of the vectors from the original data heapfile.
         // attr[0] - pageID
         // attr[1] - slotNo
-        Tuple tempBinTuple = new Tuple();
-        AttrType[] attrTypes = new AttrType[2];
-        attrTypes[0] = new AttrType(AttrType.attrInteger);
-        attrTypes[1] = new AttrType(AttrType.attrInteger);
-        short[] stringSizes = new short[0];
-        tempBinTuple.setHdr(numBinAttributes, attrTypes, stringSizes);
 
         Tuple tempDataFileTuple = new Tuple();
         tempDataFileTuple.setHdr(numDataFileAttributes, dataFileAttrTypes, dataFileStringSizes);
 
-        Heapfile unionDump = new Heapfile("unionDump");
+        Heapfile unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
         for (String hash :  hashValues)
         {
-            Heapfile hashBinFile = new Heapfile(hash);
-            binScan = hashBinFile.openScan();
-            boolean done = false;
-            while (!done)
+            FileScan binScan = new FileScan(hash, BIN_TUPLE_ATTR_TYPES, new short[0], (short) BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_PROJ_LIST, null);
+            Tuple binTuple = binScan.get_next();
+            while (binTuple != null)
             {
                 // Extract dataFile's Record ID of the tuple in the current bin.
-                tempBinTuple = binScan.getNext(ridBinScan);
-                if(tempBinTuple == null)
-                {
-                    done = true;
-                    break;
-                }
-
                 // Create the DataFile recordID of the current tuple
-                ridDataFile.pageNo.pid = tempBinTuple.getIntFld(1);
-                ridDataFile.slotNo = tempBinTuple.getIntFld(2);
-
                 // Access the tuple in the datafile with the extracted RecordID
                 // dump the tuple into unionDump
-                tempDataFileTuple = dataFileScan.getNext(ridDataFile);
-                unionDump.insertRecord(tempDataFileTuple.getTupleByteArray());
+                unionDump.insertRecord(
+                        dataFile.getRecord(new RID(new PageId(binTuple.getIntFld(1)), binTuple.getIntFld(2)))
+                        .getTupleByteArray()
+                );
+
+                binTuple = binScan.get_next();
             }
         }
         return unionDump;

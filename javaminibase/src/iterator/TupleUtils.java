@@ -408,7 +408,7 @@ public class TupleUtils
         int a_distance = TupleUtils.CompareTupleWithTuple(vectorType, a, fldNo, target, fldNo);
         int b_distance = TupleUtils.CompareTupleWithTuple(vectorType, b, fldNo, target, fldNo);
 
-        if (a_distance <= b_distance)
+        if (a_distance < b_distance)
             return -1;
         else
             return 1;
