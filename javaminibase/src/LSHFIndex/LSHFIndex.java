@@ -279,7 +279,6 @@ public class LSHFIndex
                 unionDump.insertRecord(temp.getTupleByteArray());
             }
         }
-
         return unionDump;
     }
 
