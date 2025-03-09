@@ -76,6 +76,15 @@ public class BatchInsert implements GlobalConst
         // Define attrTypes array based on each of the attributes for tuple.
         AttrType[] attrTypes = new AttrType[num_attributes];
 
+        // Create metadata file and store the attribute types in each row.
+        // Create tuple to insert into metadata file.
+        Tuple metaDataTuple = new Tuple();
+        short metaDataTupleNumAttr = 1;
+        AttrType[] metaDataTupleAttrTypes=  new AttrType[1];
+        metaDataTuple.setHdr(metaDataTupleNumAttr,metaDataTupleAttrTypes, null);
+
+        // Create a metadata heapfile
+        Heapfile dataFileMetaData = new Heapfile("dataFileMetaData");
         for (int i = 0; i < num_attributes; i++ )
         {
             int type = Integer.parseInt(attribute_types[i].trim());
@@ -105,6 +114,8 @@ public class BatchInsert implements GlobalConst
                     throw new IOException("Unknown attribute type"+type);
             }
             attrTypes[i] = new AttrType(type);
+            metaDataTuple.setIntFld(1,type);
+            dataFileMetaData.insertRecord(metaDataTuple.getTupleByteArray());
         }
 
         // Create dummy tuple to convert data from data_file_name to tuples.
@@ -123,6 +134,9 @@ public class BatchInsert implements GlobalConst
         // Set the tuple header based on the data_file_name specification.
         t.setHdr(num_attributes,attrTypes, string_lengths);
 
+        // Create a Metadatafile and store the data's metadata:
+        // 1 int attribute
+        // row 1 : attrTypes[i].AttrType
         // Our tuple structure is ready now. We need to read in num_attribute batches
         // from data_file_name, and initialize tuples and insert into heapfile.
 
