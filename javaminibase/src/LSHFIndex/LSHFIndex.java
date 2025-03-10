@@ -318,7 +318,6 @@ public class LSHFIndex
             Exception
     {
         List<String> hashValues = getBinHeapFileNames(inputVector);
-
         // Tuple Setup
         // The bin Heap files have record ids of the vectors from the original data heapfile.
         // attr[0] - pageID
@@ -328,8 +327,12 @@ public class LSHFIndex
         tempDataFileTuple.setHdr(numDataFileAttributes, dataFileAttrTypes, dataFileStringSizes);
 
         Heapfile ridDump = new Heapfile(RID_DUMP_HEAP_FILE_NAME);
-        Heapfile unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
 
+        // Create delete create again.
+        // Clearing previous unionDump and starting fresh.
+        Heapfile unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
+        unionDump.deleteFile();
+        unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
         // Dump all the record ID's from all the bins into ridDump
         for (String hash : hashValues)
         {
@@ -399,10 +402,11 @@ public class LSHFIndex
         }
 
         // TODO: Cleanup.
-        //  Delete all the heapfiles we're creating in this method.
+        //  Delete all the additional heapfiles we're creating in this method.
         //  Delete ridDump  - RID_DUMP_HEAP_FILE_NAME
-        //  Delete unionDump - UNION_DUMP_HEAP_FILE_NAME
         //  Delete cleanRidDump - CLEAN_RID_DUMP_HEAP_FILE_NAME
+        ridDump.deleteFile();
+        cleanRidDump.deleteFile();
         return unionDump;
     }
 
