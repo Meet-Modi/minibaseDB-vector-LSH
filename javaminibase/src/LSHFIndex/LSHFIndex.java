@@ -1,10 +1,7 @@
 package LSHFIndex;
 
 import bufmgr.PageNotReadException;
-import global.AttrType;
-import global.PageId;
-import global.RID;
-import global.Vector100Dtype;
+import global.*;
 import heap.*;
 import iterator.*;
 
@@ -37,6 +34,8 @@ public class LSHFIndex
     private static final String LAYER_METADATA_HEAPFILE_NAME = "LayerMetaData";
 
     public static final String UNION_DUMP_HEAP_FILE_NAME = "unionDump";
+    public static final String RID_DUMP_HEAP_FILE_NAME = "ridDump";
+    public  static final String CLEAN_RID_DUMP_HEAP_FILE_NAME = "cleanRidDump";
 
     private static final AttrType[] META_TUPLE_ATTR_TYPES = new AttrType[3];
 
@@ -86,6 +85,30 @@ public class LSHFIndex
         IntStream.range(0, BIN_TUPLE_PROJ_LIST.length).forEach(i -> BIN_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
     }
 
+    private static final AttrType[] RID_DUMP_TUPLE_ATTR_TYPES = new AttrType[3];
+
+    static
+    {
+        RID_DUMP_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
+        RID_DUMP_TUPLE_ATTR_TYPES[1] = new AttrType(AttrType.attrInteger);
+        RID_DUMP_TUPLE_ATTR_TYPES[2] = new AttrType(AttrType.attrString);
+    }
+
+    private static final short[] RID_DUMP_TUPLE_STR_LENGTHS = new short[1];
+
+    static
+    {
+        RID_DUMP_TUPLE_STR_LENGTHS[0] = 50;
+    }
+
+    private static final FldSpec[] RID_DUMP_TUPLE_PROJ_LIST = new FldSpec[RID_DUMP_TUPLE_ATTR_TYPES.length];
+
+    static
+    {
+        IntStream.range(0, RID_DUMP_TUPLE_PROJ_LIST.length).forEach(i -> RID_DUMP_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
+    }
+
+
     /**
      * Create LSHF Index class
      *
@@ -122,7 +145,7 @@ public class LSHFIndex
 
         // Store Layer States to disk
 
-        Heapfile LayerState = new Heapfile(LAYER_STATE_HEAPFILE_NAME+Integer.toString(attributeColumnNumber));
+        Heapfile LayerState = new Heapfile(LAYER_STATE_HEAPFILE_NAME + Integer.toString(attributeColumnNumber));
 
         // States to store for each Layer.
         // int: LayerNumber, int: HashNumber, 100DVector: HashRandom_Vector, int: HashShift
@@ -152,7 +175,7 @@ public class LSHFIndex
 
         // Now we store layer meta data to another heap file layerMetaData
         // No. Layers, No. Hashes per layer, Bin width.
-        Heapfile LayerMetaData = new Heapfile(LAYER_METADATA_HEAPFILE_NAME+Integer.toString(attributeColumnNumber));
+        Heapfile LayerMetaData = new Heapfile(LAYER_METADATA_HEAPFILE_NAME + Integer.toString(attributeColumnNumber));
         Tuple temp2 = new Tuple();
 
         temp2.setHdr((short) META_TUPLE_ATTR_TYPES.length, META_TUPLE_ATTR_TYPES, new short[0]);
@@ -193,7 +216,7 @@ public class LSHFIndex
             InvalidTypeException
     {
 
-        FileScan metaScan = new FileScan(LAYER_METADATA_HEAPFILE_NAME+Integer.toString(attributeColumnNumber),
+        FileScan metaScan = new FileScan(LAYER_METADATA_HEAPFILE_NAME + Integer.toString(attributeColumnNumber),
                 META_TUPLE_ATTR_TYPES,
                 new short[0],
                 (short) META_TUPLE_ATTR_TYPES.length,
@@ -201,7 +224,7 @@ public class LSHFIndex
                 META_TUPLE_PROJ_LIST,
                 null);
 
-        FileScan stateScan = new FileScan(LAYER_STATE_HEAPFILE_NAME+Integer.toString(attributeColumnNumber),
+        FileScan stateScan = new FileScan(LAYER_STATE_HEAPFILE_NAME + Integer.toString(attributeColumnNumber),
                 STATE_TUPLE_ATTR_TYPES,
                 new short[0],
                 (short) STATE_TUPLE_ATTR_TYPES.length,
@@ -304,25 +327,82 @@ public class LSHFIndex
         Tuple tempDataFileTuple = new Tuple();
         tempDataFileTuple.setHdr(numDataFileAttributes, dataFileAttrTypes, dataFileStringSizes);
 
+        Heapfile ridDump = new Heapfile(RID_DUMP_HEAP_FILE_NAME);
         Heapfile unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
+
+        // Dump all the record ID's from all the bins into ridDump
         for (String hash : hashValues)
         {
             FileScan binScan = new FileScan(hash, BIN_TUPLE_ATTR_TYPES, new short[0], (short) BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_PROJ_LIST, null);
             Tuple binTuple = binScan.get_next();
+
+            Tuple ridDumpTuple = new Tuple();
+            ridDumpTuple.setHdr((short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_ATTR_TYPES, RID_DUMP_TUPLE_STR_LENGTHS);
+
             while (binTuple != null)
             {
-                // Extract dataFile's Record ID of the tuple in the current bin.
-                // Create the DataFile recordID of the current tuple
-                // Access the tuple in the datafile with the extracted RecordID
-                // dump the tuple into unionDump
-                unionDump.insertRecord(
-                        dataFile.getRecord(new RID(new PageId(binTuple.getIntFld(1)), binTuple.getIntFld(2)))
-                                .getTupleByteArray()
-                );
+                // Create new tuple of type int: pageNo int:slotNo String:uniqueID("pageNo.slotNo")
+                int pageNo = binTuple.getIntFld(0);
+                int slotNo = binTuple.getIntFld(1);
+                String uniqueID = pageNo + "." + slotNo;
 
+                ridDumpTuple.setIntFld(1, pageNo);
+                ridDumpTuple.setIntFld(2, slotNo);
+                ridDumpTuple.setStrFld(3, uniqueID);
+
+                ridDump.insertRecord(ridDumpTuple.getTupleByteArray());
                 binTuple = binScan.get_next();
             }
         }
+
+        // Sort ridDump heapfile on the uniqueID attribute
+        FileScan ridDumpScan = new FileScan(RID_DUMP_HEAP_FILE_NAME, RID_DUMP_TUPLE_ATTR_TYPES, RID_DUMP_TUPLE_STR_LENGTHS, (short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_PROJ_LIST, null);
+
+        // Call sort on dfRIDDump
+        int sortFieldNumber = 3;
+        TupleOrder sortOrder = new TupleOrder(TupleOrder.Ascending);
+        int sortNumPages = 12;  // not sure about this! Need to look and adjust accordingly.
+        Sort ridDumpSort = new Sort(RID_DUMP_TUPLE_ATTR_TYPES, (short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_STR_LENGTHS, ridDumpScan, sortFieldNumber, sortOrder, RID_DUMP_TUPLE_STR_LENGTHS[0], sortNumPages);
+
+        // iterate over sorted RID_DUMP_HEAP_FILE
+        // Ignore duplicates and add unique records to cleanRIDDump
+        Tuple sortedRidDumpTuple = ridDumpSort.get_next();
+        Heapfile cleanRidDump = new Heapfile(CLEAN_RID_DUMP_HEAP_FILE_NAME);
+        String prevUniqueID = "";
+        while (sortedRidDumpTuple != null)
+        {
+
+            String currentUniqueID = sortedRidDumpTuple.getStrFld(3);
+
+            // if currentUniqueID != prevUniqueID add to
+            if (!(prevUniqueID.equals(currentUniqueID)))
+            {
+                cleanRidDump.insertRecord(sortedRidDumpTuple.getTupleByteArray());
+            }
+            prevUniqueID = currentUniqueID;
+            sortedRidDumpTuple = ridDumpSort.get_next();
+        }
+
+        // Read from CLEAN_RID_DUMP_HEAP_FILE, extract the tuple for that RID in the Data File, insert into union dump.
+        // Expected no duplicates
+        // Nothing changes for cleanRidScan in terms of structure of tuples. So we reuse the MACROS that we used for RID_DUMP_TUPLES.
+        FileScan cleanRidScan = new FileScan(CLEAN_RID_DUMP_HEAP_FILE_NAME, RID_DUMP_TUPLE_ATTR_TYPES, RID_DUMP_TUPLE_STR_LENGTHS, (short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_PROJ_LIST, null);
+        Tuple cleanRidTuple = cleanRidScan.get_next();
+        while (cleanRidTuple != null)
+        {
+            unionDump.insertRecord(
+                    dataFile.getRecord(new RID(new PageId(cleanRidTuple.getIntFld(1)), cleanRidTuple.getIntFld(2)))
+                            .getTupleByteArray()
+            );
+
+            cleanRidTuple = cleanRidScan.get_next();
+        }
+
+        // TODO: Cleanup.
+        //  Delete all the heapfiles we're creating in this method.
+        //  Delete ridDump  - RID_DUMP_HEAP_FILE_NAME
+        //  Delete unionDump - UNION_DUMP_HEAP_FILE_NAME
+        //  Delete cleanRidDump - CLEAN_RID_DUMP_HEAP_FILE_NAME
         return unionDump;
     }
 
