@@ -407,6 +407,7 @@ public class LSHFIndex
         //  Delete cleanRidDump - CLEAN_RID_DUMP_HEAP_FILE_NAME
         ridDump.deleteFile();
         cleanRidDump.deleteFile();
+        ridDumpSort.close();
         return unionDump;
     }
 
