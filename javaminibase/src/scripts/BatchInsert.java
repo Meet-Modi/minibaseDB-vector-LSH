@@ -1,14 +1,11 @@
 package scripts;
 
-import bufmgr.*;
 import global.SystemDefs;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.stream.IntStream;
 
 import global.*;
 import heap.*;
@@ -18,6 +15,8 @@ import static global.SystemDefs.JavabaseBM;
 
 public class BatchInsert implements GlobalConst
 {
+    public static final String DB_DATA_METADATA_HEAP_FILE_NAME = "dataFileMetaData";
+
     public static void main(String[] args) throws Exception {
         if (args.length != 4)
         {
@@ -79,12 +78,10 @@ public class BatchInsert implements GlobalConst
         // Create metadata file and store the attribute types in each row.
         // Create tuple to insert into metadata file.
         Tuple metaDataTuple = new Tuple();
-        short metaDataTupleNumAttr = 1;
-        AttrType[] metaDataTupleAttrTypes=  new AttrType[1];
-        metaDataTuple.setHdr(metaDataTupleNumAttr,metaDataTupleAttrTypes, null);
+        metaDataTuple.setHdr((short)1, new AttrType[]{new AttrType(AttrType.attrInteger)}, null);
 
         // Create a metadata heapfile
-        Heapfile dataFileMetaData = new Heapfile("dataFileMetaData");
+        Heapfile dataFileMetaData = new Heapfile(DB_DATA_METADATA_HEAP_FILE_NAME);
         for (int i = 0; i < num_attributes; i++ )
         {
             int type = Integer.parseInt(attribute_types[i].trim());

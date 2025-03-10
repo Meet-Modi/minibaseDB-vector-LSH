@@ -14,6 +14,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,7 +25,7 @@ import static global.GlobalConst.NUMBUF;
 public class ScriptTest {
 
 //    1) SET TEST CONSTANTS HERE
-    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/combinedSampleData.txt";
+    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt";
     static String INPUT_FILE_NAME = Paths.get(INPUT_FILE_PATH).getFileName().toString();
     static String DB_NAME = "batchInsertTest1";
     static int VECTOR_lENGTH = 100;
@@ -47,12 +48,12 @@ public class ScriptTest {
 
 //        DB Independent Tests
         testLshfIndexPreservationAndRestore();
-//        createNewDb();
+
+        createNewDb();
 //        readHeapFile();
 
 //        TODO Move all tests under restart db to Query Script test. This file should only test batchInsert and methods related to createDb.
-        restartOldDb();
-        // Reinitialize the index here.
+//        restartOldDb();
 
         testSortOnExistingDb();
         testHashGeneration();
@@ -64,6 +65,34 @@ public class ScriptTest {
         System.out.println();
 
         BatchInsert.main(new String[]{NUM_HASHES, NUM_LAYERS, INPUT_FILE_PATH, DB_NAME});
+
+        FileScan dbMetadataScan = new FileScan(BatchInsert.DB_DATA_METADATA_HEAP_FILE_NAME,
+                new AttrType[]{new AttrType(AttrType.attrInteger)},
+                null,
+                (short)1,
+                1,
+                new FldSpec[] {new FldSpec(new RelSpec(RelSpec.outer), 1)},
+                null
+        );
+
+        ArrayList<Integer> metadataAttrTypes = new ArrayList<>();
+        Tuple t = dbMetadataScan.get_next();
+        while(t != null) {
+            metadataAttrTypes.add(t.getIntFld(1));
+            t = dbMetadataScan.get_next();
+        }
+        dbMetadataScan.close();
+
+        prepareAttrTypesAndStrLengths();
+        if(metadataAttrTypes.size() != attrTypes.length)
+            throw new RuntimeException("FAIL - createNewDb - metadata file atttr count - " + metadataAttrTypes.size() +
+                    " mismatch with input data attr type count - " + attrTypes.length);
+
+        for(int i = 0; i < metadataAttrTypes.size(); i++ ) {
+            if(metadataAttrTypes.get(i) != attrTypes[i].attrType)
+                throw new RuntimeException("FAIL - createNewDb - attrType mismatch between data file and metadata file. Index = " + i +
+                        " attr type from data file - " + attrTypes[i] + " attr type from metadata file - " + metadataAttrTypes.get(i));
+        }
 
         Heapfile hf = new Heapfile(INPUT_FILE_NAME);
         System.out.println("PASS - Create Db");
@@ -83,16 +112,20 @@ public class ScriptTest {
     }
 
     private static void readHeapFile() throws Exception {
+        System.out.println();
+
         FileScan hfScan = perpareAndGetHeapFileScan();
         Tuple t = hfScan.get_next();
 
-        int i = 1;
+        int i = 0;
         while(t  != null) {
-            System.out.println("\nTuple " + i);
-            printTuple(t);
+//            System.out.println("\nTuple " + i);
+//            printTuple(t);
             t = hfScan.get_next();
             i++;
         }
+
+        System.out.println("PASS - readHeapFile - Record Count - " + i);
     }
 
     public static void testSortOnExistingDb() throws Exception {
@@ -264,27 +297,36 @@ public class ScriptTest {
 
             Heapfile unionFile = index.union(target, attrTypes, num_attributes, string_lengths, new Heapfile(INPUT_FILE_NAME));
             System.out.println("Union File Record Count - " + unionFile.getRecCnt());
-//            TODO Uncomment after duplicate elimination + union file clearing implemented
-//            if(unionFile.getRecCnt() > totalRecordsInDataFile)
-////                Duplicate elimination failing or you are not deleting and recreating union file before new union
-//                throw new RuntimeException("FAIL - testIndexUnion - unionFile has more records than data file! UnionFileRecCount - " +
-//                        unionFile.getRecCnt() + " dataFileRecCount - " + totalRecordsInDataFile);
+            if(unionFile.getRecCnt() > totalRecordsInDataFile)
+//                Duplicate elimination failing or you are not deleting and recreating union file before new union
+                throw new RuntimeException("FAIL - testIndexUnion - unionFile has more records than data file! UnionFileRecCount - " +
+                        unionFile.getRecCnt() + " dataFileRecCount - " + totalRecordsInDataFile);
 
             FileScan scan = new FileScan(LSHFIndex.UNION_DUMP_HEAP_FILE_NAME, attrTypes, string_lengths, num_attributes, num_attributes, projlist, null);
             Sort sort = new Sort(attrTypes, num_attributes, string_lengths, scan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
 
             Tuple t = sort.get_next();
             int prevDistance = Integer.MIN_VALUE;
+            Vector100Dtype prevVector = null;
             while(t  != null) {
                 int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, t, vectorFieldNumber);
                 System.out.println("Distance from Target = " + distance);
+
                 if(distance < prevDistance)
                     throw new RuntimeException("FAIL - testIndexUnion - No longer in ascending order!! vectorFieldNumber - " + vectorFieldNumber);
                 prevDistance = distance;
+
+//                Use sample_data_1.txt as it has no duplicates. Else comment out this check if data file itself has duplicates
+                Vector100Dtype currentVector = t.get100DVectFld(vectorFieldNumber);
+                if(currentVector.equals(prevVector))
+                    throw new RuntimeException("FAIL - testIndexUnion - Duplicate detected!! vectorFieldNumber - " + vectorFieldNumber);
+                prevVector = currentVector;
+
 //            printTuple(t);
                 t = sort.get_next();
             }
-            sort.close();
+//            TODO Fix sort.close
+//            sort.close();
             scan.close();
         }
         System.out.println("PASS - testIndexUnion");

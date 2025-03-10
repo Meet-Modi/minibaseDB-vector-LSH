@@ -90,6 +90,7 @@ public class TupleUtils
                 // Now handle the special case that is posed by the max_values for strings...
                 if (t1_s.compareTo(t2_s) > 0) return 1;
                 if (t1_s.compareTo(t2_s) < 0) return -1;
+                return 0;
 
             case AttrType.attrVector100D:
                 try

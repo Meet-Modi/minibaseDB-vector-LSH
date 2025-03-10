@@ -321,17 +321,8 @@ public class LSHFIndex
         // attr[0] - pageID
         // attr[1] - slotNo
 
-        Tuple tempDataFileTuple = new Tuple();
-        tempDataFileTuple.setHdr(numDataFileAttributes, dataFileAttrTypes, dataFileStringSizes);
-
-        Heapfile ridDump = new Heapfile(RID_DUMP_HEAP_FILE_NAME);
-
-        // Create delete create again.
-        // Clearing previous unionDump and starting fresh.
-        Heapfile unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
-        unionDump.deleteFile();
-        unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
         // Dump all the record ID's from all the bins into ridDump
+        Heapfile ridDump = new Heapfile(RID_DUMP_HEAP_FILE_NAME);
         for (String hash : hashValues)
         {
             FileScan binScan = new FileScan(hash, BIN_TUPLE_ATTR_TYPES, new short[0], (short) BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_PROJ_LIST, null);
@@ -343,8 +334,8 @@ public class LSHFIndex
             while (binTuple != null)
             {
                 // Create new tuple of type int: pageNo int:slotNo String:uniqueID("pageNo.slotNo")
-                int pageNo = binTuple.getIntFld(0);
-                int slotNo = binTuple.getIntFld(1);
+                int pageNo = binTuple.getIntFld(1);
+                int slotNo = binTuple.getIntFld(2);
                 String uniqueID = pageNo + "." + slotNo;
 
                 ridDumpTuple.setIntFld(1, pageNo);
@@ -354,6 +345,7 @@ public class LSHFIndex
                 ridDump.insertRecord(ridDumpTuple.getTupleByteArray());
                 binTuple = binScan.get_next();
             }
+            binScan.close();
         }
 
         // Sort ridDump heapfile on the uniqueID attribute
@@ -377,9 +369,7 @@ public class LSHFIndex
 
             // if currentUniqueID != prevUniqueID add to
             if (!(prevUniqueID.equals(currentUniqueID)))
-            {
                 cleanRidDump.insertRecord(sortedRidDumpTuple.getTupleByteArray());
-            }
             prevUniqueID = currentUniqueID;
             sortedRidDumpTuple = ridDumpSort.get_next();
         }
@@ -389,6 +379,13 @@ public class LSHFIndex
         // Nothing changes for cleanRidScan in terms of structure of tuples. So we reuse the MACROS that we used for RID_DUMP_TUPLES.
         FileScan cleanRidScan = new FileScan(CLEAN_RID_DUMP_HEAP_FILE_NAME, RID_DUMP_TUPLE_ATTR_TYPES, RID_DUMP_TUPLE_STR_LENGTHS, (short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_PROJ_LIST, null);
         Tuple cleanRidTuple = cleanRidScan.get_next();
+
+        // Create delete create again.
+        // Clearing previous unionDump and starting fresh.
+        Heapfile unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
+        unionDump.deleteFile();
+        unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
+
         while (cleanRidTuple != null)
         {
             unionDump.insertRecord(
@@ -399,13 +396,14 @@ public class LSHFIndex
             cleanRidTuple = cleanRidScan.get_next();
         }
 
-        // TODO: Cleanup.
-        //  Delete all the additional heapfiles we're creating in this method.
-        //  Delete ridDump  - RID_DUMP_HEAP_FILE_NAME
-        //  Delete cleanRidDump - CLEAN_RID_DUMP_HEAP_FILE_NAME
         ridDump.deleteFile();
         cleanRidDump.deleteFile();
-        ridDumpSort.close();
+//        TODO Fix sort.close
+//        ridDumpSort.close();
+
+        ridDumpScan.close();
+        cleanRidScan.close();
+
         return unionDump;
     }
 
