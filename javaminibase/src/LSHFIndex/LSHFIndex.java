@@ -24,7 +24,6 @@ public class LSHFIndex
     private int numLayers;
     private int noOfHashFunctionsPerLayer;
     private int attributeColumnNumber;
-    private int noOfHashFunctions;
 
 
     private Layer[] layers; // L
@@ -144,8 +143,7 @@ public class LSHFIndex
         }
 
         // Store Layer States to disk
-
-        Heapfile LayerState = new Heapfile(LAYER_STATE_HEAPFILE_NAME + Integer.toString(attributeColumnNumber));
+        Heapfile LayerState = new Heapfile(LAYER_STATE_HEAPFILE_NAME+attributeColumnNumber);
 
         // States to store for each Layer.
         // int: LayerNumber, int: HashNumber, 100DVector: HashRandom_Vector, int: HashShift
@@ -175,7 +173,7 @@ public class LSHFIndex
 
         // Now we store layer meta data to another heap file layerMetaData
         // No. Layers, No. Hashes per layer, Bin width.
-        Heapfile LayerMetaData = new Heapfile(LAYER_METADATA_HEAPFILE_NAME + Integer.toString(attributeColumnNumber));
+        Heapfile LayerMetaData = new Heapfile(LAYER_METADATA_HEAPFILE_NAME+attributeColumnNumber);
         Tuple temp2 = new Tuple();
 
         temp2.setHdr((short) META_TUPLE_ATTR_TYPES.length, META_TUPLE_ATTR_TYPES, new short[0]);
@@ -197,7 +195,7 @@ public class LSHFIndex
      * <p>
      * This constructor is to restore an existing LSHF index with its randomized vectors and shifts.
      */
-    public LSHFIndex()
+    public LSHFIndex(int attributeColumnNumber)
             throws
             InvalidTupleSizeException,
             IOException,
@@ -215,8 +213,9 @@ public class LSHFIndex
             JoinsException,
             InvalidTypeException
     {
+        this.attributeColumnNumber = attributeColumnNumber;
 
-        FileScan metaScan = new FileScan(LAYER_METADATA_HEAPFILE_NAME + Integer.toString(attributeColumnNumber),
+        FileScan metaScan = new FileScan(LAYER_METADATA_HEAPFILE_NAME+attributeColumnNumber,
                 META_TUPLE_ATTR_TYPES,
                 new short[0],
                 (short) META_TUPLE_ATTR_TYPES.length,
@@ -224,7 +223,7 @@ public class LSHFIndex
                 META_TUPLE_PROJ_LIST,
                 null);
 
-        FileScan stateScan = new FileScan(LAYER_STATE_HEAPFILE_NAME + Integer.toString(attributeColumnNumber),
+        FileScan stateScan = new FileScan(LAYER_STATE_HEAPFILE_NAME+attributeColumnNumber,
                 STATE_TUPLE_ATTR_TYPES,
                 new short[0],
                 (short) STATE_TUPLE_ATTR_TYPES.length,
@@ -278,14 +277,13 @@ public class LSHFIndex
         for (int layer = 0; layer < hashValues.length; layer++)
         {
             String hashValue = hashValues[layer];
-            Heapfile heapFile = new Heapfile(generateBinHeapFileName(layer, hashValue));
+            Heapfile heapFile = new Heapfile(generateBinHeapFileName(layer, attributeColumnNumber, hashValue));
             insertRIDIntoHeapfile(heapFile, rid);
         }
     }
 
-    public static String generateBinHeapFileName(int layer, String hash)
-    {
-        return "layer-" + layer + "-bin-" + hash;
+    public static String generateBinHeapFileName(int layer, int attributeColumnNumber,String hash) {
+        return "col" + attributeColumnNumber + "lay" + layer + "bin" + hash;
     }
 
     private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid)
@@ -308,7 +306,7 @@ public class LSHFIndex
         List<String> binNames = new ArrayList<>();
         for (int layer = 0; layer < hashValues.length; layer++)
         {
-            binNames.add(generateBinHeapFileName(layer, hashValues[layer]));
+            binNames.add(generateBinHeapFileName(layer, attributeColumnNumber, hashValues[layer]));
         }
         return binNames;
     }
@@ -422,6 +420,7 @@ public class LSHFIndex
         return ((this.binLength == otherIndex.binLength) &&
                 (this.numLayers == otherIndex.numLayers) &&
                 (this.noOfHashFunctionsPerLayer == otherIndex.noOfHashFunctionsPerLayer) &&
+                (this.attributeColumnNumber == otherIndex.attributeColumnNumber) &&
                 (Arrays.equals(this.layers, otherIndex.layers)));
     }
 

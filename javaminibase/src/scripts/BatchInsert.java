@@ -6,6 +6,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
@@ -43,8 +44,7 @@ public class BatchInsert implements GlobalConst
         SystemDefs systemDefs = new SystemDefs(dbpath, NUMBUF,NUMBUF, "Clock");
 
         short string_attribute_count = 0;
-        short vector_attribute_count = 0;
-        LSHFIndex[] lshfIndices;
+        final ArrayList<Integer> vectorFieldNumbers = new ArrayList<>();
 
         // Create a Buffered reader to read the file: data_file_name
 
@@ -108,7 +108,7 @@ public class BatchInsert implements GlobalConst
                 case 4:
                     // 100D-vector.
                     type = 5;
-                    vector_attribute_count++;
+                    vectorFieldNumbers.add(i+1);
                     break;
                 default:
                     throw new IOException("Unknown attribute type"+type);
@@ -146,42 +146,17 @@ public class BatchInsert implements GlobalConst
         String tuple_value;
         boolean end_of_file = false;
 
-        //            TODO - We need to create an LSHFIndex for every vector input column.
-//        However our current state preservation/restoration of LSHFIndex doesn't handle multiple indices
-//
-//        // For each 100Dvector attribute in the input
-//        // init it's LSHF index with num_hashes and num_layers
-        lshfIndices = new LSHFIndex[vector_attribute_count];
-        for(int i = 0; i<vector_attribute_count; i++)
-        {
-            // Create an array of LSHF indexes
-            // The constructor should initialize each of the random attributes
-            for(int j=0; j<num_attributes; j++)
-            {
-                // iterate over attrType array and create LSHFidices for 100DVector attribute columns.
-                if (attrTypes[j].attrType == AttrType.attrVector100D)
-                {
-                    lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes,j+1);
-                }
-            }
-
-        }
-
-////        TODO - Remove after implementing multi LSHFIndex state preservation
-////        For now only create 1 LSHFIndex
-//        LSHFIndex index = new LSHFIndex(num_layers, bin_length, num_hashes);
-//        int firstVectorFieldNumber = 0;
-//        for(int i=0; i < attrTypes.length; i++) {
-//            if(attrTypes[i].attrType == AttrType.attrVector100D) {
-//                firstVectorFieldNumber = i + 1;
-//                break;
-//            }
-//        }
+        // For each 100Dvector attribute in the input
+        // init it's LSHF index with num_hashes and num_layers
+        final LSHFIndex[] lshfIndices = new LSHFIndex[vectorFieldNumbers.size()];
+        for(int i=0; i < vectorFieldNumbers.size(); i++)
+            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes,vectorFieldNumbers.get(i));
 
         while (true)
         {
             // Create tuple for input into heapfile.
             // Read in batches of size num_attributes.
+            ArrayList<Vector100Dtype> vectorsInDataLine = new ArrayList<>();
             for (int i = 0; i < num_attributes; i++)
             {
                 tuple_value = br.readLine();
@@ -209,6 +184,8 @@ public class BatchInsert implements GlobalConst
 
                     case AttrType.attrVector100D:
                         Vector100Dtype input_vector100D = new Vector100Dtype();
+                        vectorsInDataLine.add(input_vector100D);
+
                         String[] tupleValueSplit = tuple_value.split(" ");
                         for (int j = 0; j < 100; j++)
                         {
@@ -227,7 +204,8 @@ public class BatchInsert implements GlobalConst
             if (end_of_file) break;
             rid = file.insertRecord(t.getTupleByteArray());
 
-            index.insertRecord(t.get100DVectFld(firstVectorFieldNumber), rid);
+            for(int i = 0; i < lshfIndices.length; i++)
+                lshfIndices[i].insertRecord(vectorsInDataLine.get(i), rid);
         }
 
         JavabaseBM.flushAllPages();

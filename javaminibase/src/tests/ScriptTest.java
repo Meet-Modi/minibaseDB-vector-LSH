@@ -13,7 +13,6 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,42 +37,48 @@ public class ScriptTest {
     static short[] string_lengths;
     static short num_attributes;
 
-    static String targetVectorString = "4565 8373 27 4635 1491 6298 7433 9922 608 3908 3098 1048 9312 6420 8885 2242 5275 473 4824 766 2347 4009 5474 2706 5885 4529 2362 4247 9073 9235 5209 2376 3401 9946 2082 2997 78 1007 5763 2260 4856 7147 1830 5692 8322 908 5034 1413 526 1567 4363 7338 2412 8365 8098 2780 1302 7951 2061 6802 300 8272 8652 1225 6443 530 1004 2160 766 4723 4578 6777 8567 9665 9326 8125 5287 946 3089 5472 9485 3344 7538 1317 8692 8373 5006 5374 7018 1738 7045 8212 3542 3146 7298 9058 4077 9605 5734 1954";
+    static String targetVectorString = "33 94 82 70 57 5 67 73 54 74 80 79 33 86 57 45 13 27 80 99 26 30 16 90 47 33 92 3 82 9 7 78 7 86 73 56 1 47 82 19 78 28 67 16 89 96 70 13 13 11 84 6 2 82 22 13 56 47 36 22 14 14 36 37 90 42 86 63 54 49 64 90 2 18 26 90 20 44 40 6 40 49 65 31 75 75 19 98 60 56 14 42 68 64 36 88 18 94 90 24";
     static Vector100Dtype target = new Vector100Dtype();
-    static short vectorFieldNumber = 2;
+    static short[] vectorFieldNumbers = new short[]{2, 4};
 
     public static void main(String[] args) throws Exception {
 
 //        2) PICK A TEST/TESTS. COMMENT OUT REST
 
 //        DB Independent Tests
-//        testLshfIndexPreservationAndRestore();
-
+        testLshfIndexPreservationAndRestore();
 //        createNewDb();
+//        readHeapFile();
 
+//        TODO Move all tests under restart db to Query Script test. This file should only test batchInsert and methods related to createDb.
         restartOldDb();
         // Reinitialize the index here.
 
-//        readHeapFile();
-//        testSortOnExistingDb();
-//        testHashGeneration();
-//        testWriteDuringTupleHashAndReadBins();
+        testSortOnExistingDb();
+        testHashGeneration();
+        testWriteDuringTupleHashAndReadBins();
         testIndexUnion();
     }
 
     private static void createNewDb() throws Exception {
+        System.out.println();
+
         BatchInsert.main(new String[]{NUM_HASHES, NUM_LAYERS, INPUT_FILE_PATH, DB_NAME});
 
         Heapfile hf = new Heapfile(INPUT_FILE_NAME);
+        System.out.println("PASS - Create Db");
         System.out.println("Record Count in Heap File = " + hf.getRecCnt());
     }
 
     private static void restartOldDb() throws Exception {
+        System.out.println();
+
         String dbpath = "/tmp/"  + System.getProperty("user.name") + "."+ DB_NAME + "-db";
         SystemDefs.MINIBASE_RESTART_FLAG = true;
-        SystemDefs systemDefs = new SystemDefs(dbpath, NUMBUF, NUMBUF, "Clock");
+        new SystemDefs(dbpath, NUMBUF, NUMBUF, "Clock");
 
         Heapfile hf = new Heapfile(INPUT_FILE_NAME);
+        System.out.println("PASS - Restart Db");
         System.out.println("Record Count in Heap File = " + hf.getRecCnt());
     }
 
@@ -91,136 +96,198 @@ public class ScriptTest {
     }
 
     public static void testSortOnExistingDb() throws Exception {
+        System.out.println();
+
         prepareTargetVectorTypeFromString();
-        FileScan hfScan = perpareAndGetHeapFileScan();
 
-        Sort sort = new Sort(attrTypes, num_attributes, string_lengths, hfScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
-        Tuple t = sort.get_next();
+        for(int i=0; i < vectorFieldNumbers.length; i++) {
+            System.out.println("Sort Test - Sorting on fieldNumber - " + vectorFieldNumbers[i]);
 
-        Tuple targetTuple = new Tuple();
-        targetTuple.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrVector100D)}, new short[0]);
-        targetTuple.set100DVectFld(1, target);
+            FileScan hfScan = perpareAndGetHeapFileScan();
+            Sort sort = new Sort(attrTypes, num_attributes, string_lengths, hfScan, vectorFieldNumbers[i], new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
+            Tuple t = sort.get_next();
 
-        while(t != null) {
-            int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, t, vectorFieldNumber);
-            System.out.println("\nDistance from Target = " + distance);
-            printTuple(t);
-            t = sort.get_next();
+            Tuple targetTuple = new Tuple();
+            targetTuple.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrVector100D)}, new short[0]);
+            targetTuple.set100DVectFld(1, target);
+
+            int prevDistance = Integer.MIN_VALUE;
+            while (t != null) {
+                int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, t, vectorFieldNumbers[i]);
+                System.out.println("Distance from Target = " + distance);
+                if(distance < prevDistance)
+                    throw new RuntimeException("FAIL - Sort Test - No longer in ascending order!!");
+                prevDistance = distance;
+//                printTuple(t);
+                t = sort.get_next();
+            }
+//            TODO Check code if we are closing all scans/sorts/iterators -> Fix sort.close
+//            sort.close();
+            hfScan.close();
         }
 
+        System.out.println("PASS - Sort Test");
     }
 
-    public static void testHashGeneration() throws Exception
-    {
+    public static void testHashGeneration() throws Exception {
+        System.out.println();
+
         int nLayers = 1;
         int nHashes = 5;
         int binLength = 1_000_000_000;
-        LSHFIndex testIndex = new LSHFIndex(nLayers, binLength, nHashes);
+        HashMap<Integer, LSHFIndex> fieldNumberTolshfIndex = new HashMap<>();
+        for(int vectorFieldNumber : vectorFieldNumbers)
+            fieldNumberTolshfIndex.put(vectorFieldNumber, new LSHFIndex(nLayers, binLength, nHashes, vectorFieldNumber));
 
-        FileScan hfScan = perpareAndGetHeapFileScan();
-        Tuple t = hfScan.get_next();
-        HashSet<String> uniqueAllLayerHashes = new HashSet<>();
-        while(t != null) {
-            Vector100Dtype vector = new Vector100Dtype(t.get100DVectFld(vectorFieldNumber).vector);
+        for(int vectorFieldNumber : vectorFieldNumbers) {
+            FileScan hfScan = perpareAndGetHeapFileScan();
+            Tuple t = hfScan.get_next();
+            HashSet<String> uniqueAllLayerHashes = new HashSet<>();
 
-            String[] hash1 = testIndex.getAllLayersHash(vector);
-            String[] hash2 = testIndex.getAllLayersHash(vector);
-            if(! Arrays.equals(hash1, hash2)) {
-                System.out.println("HASH MISMATCH!!");
-                System.out.println("Hash 1 - " + hash1);
-                System.out.println("Hash 1 - " + hash2);
-                return;
+            while(t != null) {
+                Vector100Dtype vector = new Vector100Dtype(t.get100DVectFld(vectorFieldNumber).vector);
+
+                String[] hash1 = fieldNumberTolshfIndex.get(vectorFieldNumber).getAllLayersHash(vector);
+                String[] hash2 = fieldNumberTolshfIndex.get(vectorFieldNumber).getAllLayersHash(vector);
+                if(! Arrays.equals(hash1, hash2)) {
+                    System.out.println("Hash 1 - " + hash1);
+                    System.out.println("Hash 1 - " + hash2);
+                    throw new RuntimeException("FAIL - testHashGeneration - HASH MISMATCH!");
+                }
+
+                uniqueAllLayerHashes.add(String.join("_", hash1));
+                t = hfScan.get_next();
             }
 
-            uniqueAllLayerHashes.add(String.join("_", hash1));
-            t = hfScan.get_next();
+//            uniqueAllLayerHashes.forEach(System.out::println);
+            System.out.println("Unique Hashes Count for fieldNumber - " + vectorFieldNumber + " = " + uniqueAllLayerHashes.size());
+            hfScan.close();
         }
-
-        uniqueAllLayerHashes.forEach(System.out::println);
-        System.out.println("Unique Hashes Count - " + uniqueAllLayerHashes.size());
+        System.out.println("PASS - testHashGeneration");
     }
 
     private static void testLshfIndexPreservationAndRestore() throws Exception {
+        System.out.println();
+
         String dbpath = "/tmp/"  + System.getProperty("user.name") + ".lshfPreservationTest-db";
         Files.deleteIfExists(Paths.get(dbpath));
         new SystemDefs(dbpath, NUMBUF,NUMBUF, "Clock");
 
-        LSHFIndex originalIndex = new LSHFIndex(3, 10, 5);
-        LSHFIndex indexFromDisk = new LSHFIndex();
-
-        if(! originalIndex.equals(indexFromDisk)) {
-            System.out.println("NOT EQUAL!!!");
+        LSHFIndex originalIndex1 = new LSHFIndex(3, 10, 5, 1);
+        LSHFIndex indexFromDisk1 = new LSHFIndex(1);
+        if(! originalIndex1.equals(indexFromDisk1)) {
+            System.out.println("FAIL - Index PreservationTest - Single index not equal!!!");
+            throw new RuntimeException("FAIL - Index PreservationTest");
         }
+
+        LSHFIndex originalIndex2 = new LSHFIndex(3, 7, 2, 2);
+        LSHFIndex indexFromDisk2 = new LSHFIndex(2);
+        indexFromDisk1 = new LSHFIndex(1);
+        if(! originalIndex2.equals(indexFromDisk2) || ! originalIndex1.equals(indexFromDisk1)) {
+            System.out.println("FAIL - Index PreservationTest - Multi index not equal!!!");
+            throw new RuntimeException("FAIL - Index PreservationTest");
+
+        }
+
+        System.out.println("PASS - Index PreservationTest");
     }
 
     private static void testWriteDuringTupleHashAndReadBins() throws Exception {
-        LSHFIndex index = new LSHFIndex();
+        System.out.println();
+
+        HashMap<Integer, LSHFIndex> vectorFieldNumberToLshIndex = new HashMap<>();
+        for(int vectorFieldNumber : vectorFieldNumbers)
+            vectorFieldNumberToLshIndex.put(vectorFieldNumber, new LSHFIndex(vectorFieldNumber));
+
+
         FileScan hfScan = perpareAndGetHeapFileScan();
 
         int dataHeapFileRecordSize = 0;
 
         Tuple t = hfScan.get_next();
-        HashMap<Integer, HashSet<String>> layerToUniqueHashesMap = new HashMap<>();
-
+        HashMap<Integer, HashMap<Integer, HashSet<String>>> vectorFieldNumberToLayerToUniqueHashesMap = new HashMap<>();
         while(t != null) {
             dataHeapFileRecordSize++;
 
-            String[] hashes = index.getAllLayersHash(t.get100DVectFld(vectorFieldNumber));
-            IntStream.range(0, hashes.length).forEach(i -> {
-                if(! layerToUniqueHashesMap.containsKey(i)) {
-                    layerToUniqueHashesMap.put(i, new HashSet<>());
-                }
-                layerToUniqueHashesMap.get(i).add(hashes[i]);
-            });
+            for(int vectorFieldNumber : vectorFieldNumbers) {
+                HashMap<Integer, HashSet<String>> layerToUniqueHashesMap = vectorFieldNumberToLayerToUniqueHashesMap.compute(vectorFieldNumber, (k,v) -> (v == null) ? new HashMap<>() : v);
+                LSHFIndex index = vectorFieldNumberToLshIndex.get(vectorFieldNumber);
 
+                String[] hashes = index.getAllLayersHash(t.get100DVectFld(vectorFieldNumber));
+                IntStream.range(0, hashes.length).forEach(i -> layerToUniqueHashesMap.compute(i, (k,v) -> (v==null) ? new HashSet<>() : v).add(hashes[i]));
+            }
             t = hfScan.get_next();
         }
+        hfScan.close();
 
-        HashMap<Integer, Integer> layerToNumberOfRecords = new HashMap<>();
-
-        IntStream.range(0, Integer.parseInt(NUM_LAYERS)).forEach(i -> {
-            layerToUniqueHashesMap.get(i).forEach(hash -> {
-                try {
-                    Heapfile hf = new Heapfile(LSHFIndex.generateBinHeapFileName(i, hash));
+        HashMap<Integer, HashMap<Integer, Integer>> vectorFieldNumberToLayerToNumberOfRecords = new HashMap<>();
+        for(int vectorFieldNumber : vectorFieldNumbers) {
+            HashMap<Integer, HashSet<String>> layerToUniqueHashesMap = vectorFieldNumberToLayerToUniqueHashesMap.get(vectorFieldNumber);
+            for(int i = 0 ; i < Integer.parseInt(NUM_LAYERS); i ++) {
+                for(String hash : layerToUniqueHashesMap.get(i)) {
+                    Heapfile hf = new Heapfile(LSHFIndex.generateBinHeapFileName(i, vectorFieldNumber, hash));
+                    HashMap<Integer, Integer> layerToNumberOfRecords = vectorFieldNumberToLayerToNumberOfRecords.compute(vectorFieldNumber, (k,v) -> (v == null) ? new HashMap<>() : v);
                     layerToNumberOfRecords.put(i, layerToNumberOfRecords.getOrDefault(i, 0) + hf.getRecCnt());
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
                 }
-            });
-        });
-
-        for(Integer i : layerToNumberOfRecords.keySet()) {
-            if(layerToNumberOfRecords.get(i) != dataHeapFileRecordSize) {
-                System.out.println("MISMATCH!! dataHeapFileRecordSize = " + dataHeapFileRecordSize +
-                        " but layer " + i + "has only " + layerToNumberOfRecords.get(i) + " records");
             }
         }
+
+        for(int vectorFieldNumber : vectorFieldNumbers) {
+            HashMap<Integer, Integer> layerToNumberOfRecords = vectorFieldNumberToLayerToNumberOfRecords.get(vectorFieldNumber);
+            for(Integer i : layerToNumberOfRecords.keySet()) {
+                if (layerToNumberOfRecords.get(i) != dataHeapFileRecordSize) {
+                    throw new RuntimeException("FAIL - testWriteDuringTupleHashAndReadBins - " +
+                            "MISMATCH!! dataHeapFileRecordSize = " + dataHeapFileRecordSize +
+                            " but layer " + i + " has only " + layerToNumberOfRecords.get(i) + " records for vectorFieldNumber "
+                            + vectorFieldNumber);
+                }
+            }
+        }
+
+        System.out.println("PASS - testWriteDuringTupleHashAndReadBins");
     }
 
     private static void testIndexUnion() throws Exception {
+        System.out.println();
         prepareTargetVectorTypeFromString();
         prepareAttrTypesAndStrLengths();
         prepareProjList();
 
-        LSHFIndex index = new LSHFIndex();
-        Heapfile unionFile = index.union(target, attrTypes, num_attributes, string_lengths, new Heapfile(INPUT_FILE_NAME));
-
-        System.out.println("Union File Record Count - " + unionFile.getRecCnt());
-
-        FileScan scan = new FileScan(LSHFIndex.UNION_DUMP_HEAP_FILE_NAME, attrTypes, string_lengths, num_attributes, num_attributes, projlist, null);
-        Sort sort = new Sort(attrTypes, num_attributes, string_lengths, scan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
+        int totalRecordsInDataFile = new Heapfile(INPUT_FILE_NAME).getRecCnt();
 
         Tuple targetTuple = new Tuple();
         targetTuple.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrVector100D)}, new short[0]);
         targetTuple.set100DVectFld(1, target);
 
-        Tuple t = sort.get_next();
-        while(t  != null) {
-            int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, t, vectorFieldNumber);
-            System.out.println("\nDistance from Target = " + distance);
+        for(int vectorFieldNumber : vectorFieldNumbers) {
+            LSHFIndex index = new LSHFIndex(vectorFieldNumber);
+
+            Heapfile unionFile = index.union(target, attrTypes, num_attributes, string_lengths, new Heapfile(INPUT_FILE_NAME));
+            System.out.println("Union File Record Count - " + unionFile.getRecCnt());
+//            TODO Uncomment after duplicate elimination + union file clearing implemented
+//            if(unionFile.getRecCnt() > totalRecordsInDataFile)
+////                Duplicate elimination failing or you are not deleting and recreating union file before new union
+//                throw new RuntimeException("FAIL - testIndexUnion - unionFile has more records than data file! UnionFileRecCount - " +
+//                        unionFile.getRecCnt() + " dataFileRecCount - " + totalRecordsInDataFile);
+
+            FileScan scan = new FileScan(LSHFIndex.UNION_DUMP_HEAP_FILE_NAME, attrTypes, string_lengths, num_attributes, num_attributes, projlist, null);
+            Sort sort = new Sort(attrTypes, num_attributes, string_lengths, scan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
+
+            Tuple t = sort.get_next();
+            int prevDistance = Integer.MIN_VALUE;
+            while(t  != null) {
+                int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, t, vectorFieldNumber);
+                System.out.println("Distance from Target = " + distance);
+                if(distance < prevDistance)
+                    throw new RuntimeException("FAIL - testIndexUnion - No longer in ascending order!! vectorFieldNumber - " + vectorFieldNumber);
+                prevDistance = distance;
 //            printTuple(t);
-            t = sort.get_next();
+                t = sort.get_next();
+            }
+            sort.close();
+            scan.close();
         }
+        System.out.println("PASS - testIndexUnion");
     }
 
 //    TEST HELPERS
