@@ -1,8 +1,14 @@
 package index;
 
 import LSHFIndex.LSHFIndex;
-import global.*;
+import bufmgr.PageNotReadException;
+import global.AttrType;
+import global.IndexType;
+import global.TupleOrder;
+import global.Vector100Dtype;
 import heap.Heapfile;
+import heap.InvalidTupleSizeException;
+import heap.InvalidTypeException;
 import heap.Tuple;
 import iterator.*;
 import scripts.BatchInsert;
@@ -10,7 +16,7 @@ import scripts.BatchInsert;
 import java.io.IOException;
 import java.util.stream.IntStream;
 
-public class NNIndexScan extends Iterator {
+public class RSIndexScan extends Iterator {
 
     private final Vector100Dtype target;
     private final Tuple targetTuple;
@@ -24,20 +30,20 @@ public class NNIndexScan extends Iterator {
 
     private FileScan unionFileScan;
     private Sort sort;
-    private int count;
+    private final int maxDistance;
 
     private final Tuple outTuple;
 
-    public NNIndexScan(IndexType index,
-                java.lang.String relName, java.lang.String indName,
-                AttrType[] types, short[] str_sizes, int noInFlds,
-                int noOutFlds, FldSpec[] outFlds,
-                CondExpr[] selects,
-                int fldNum,
-                Vector100Dtype query, int count) throws Exception {
+    public RSIndexScan(IndexType index,
+                       java.lang.String relName, java.lang.String indName,
+                       AttrType[] types, short[] str_sizes, int noInFlds,
+                       int noOutFlds, FldSpec[] outFlds,
+                       CondExpr[] selects,
+                       int fldNum,
+                       Vector100Dtype query, int distance) throws Exception {
 
         if((index != null) && (index.indexType != IndexType.Lsh))
-            throw new RuntimeException("NNIndexScan can only be used with index type LSH");
+            throw new RuntimeException("RSIndexScan can only be used with index type LSH");
 
         target = query;
         targetTuple = new Tuple();
@@ -48,7 +54,7 @@ public class NNIndexScan extends Iterator {
         numAttributes = (short)noInFlds;
         strLengths = str_sizes;
         vectorFieldNumber = fldNum;
-        this.count = count;
+        this.maxDistance = distance;
         projList = outFlds;
         numAttributesOut = noOutFlds;
 
@@ -78,13 +84,14 @@ public class NNIndexScan extends Iterator {
         }
 
         Tuple currentTuple = sort.get_next();
-        if((currentTuple == null) || (count <= 0))
+        if(currentTuple == null)
             return null;
-        count--;
+        int currDistance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, currentTuple, vectorFieldNumber);
+        if(currDistance > maxDistance)
+            return null;
 
 //        DEBUG - Uncomment to see distance from target
-//        int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, currentTuple, vectorFieldNumber);
-//        System.out.println("Distance from Target = " + distance);
+//        System.out.println("Distance from Target = " + currDistance);
 
         currentTuple.setHdr(numAttributes, attrTypes, strLengths);
         Projection.Project(currentTuple, attrTypes, outTuple, projList, numAttributesOut);

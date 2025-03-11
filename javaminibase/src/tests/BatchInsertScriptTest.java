@@ -323,8 +323,7 @@ public class BatchInsertScriptTest {
 //            printTuple(t);
                 t = sort.get_next();
             }
-//            TODO Fix sort.close
-//            sort.close();
+            sort.close();
             scan.close();
         }
         System.out.println("PASS - testIndexUnion");

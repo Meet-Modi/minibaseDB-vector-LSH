@@ -398,8 +398,7 @@ public class LSHFIndex
 
         ridDump.deleteFile();
         cleanRidDump.deleteFile();
-//        TODO Fix sort.close
-//        ridDumpSort.close();
+        ridDumpSort.close();
 
         ridDumpScan.close();
         cleanRidScan.close();

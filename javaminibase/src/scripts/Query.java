@@ -10,12 +10,14 @@ import java.util.stream.IntStream;
 import global.*;
 import heap.Tuple;
 import index.NNIndexScan;
+import index.RSIndexScan;
 import iterator.FileScan;
 import iterator.FldSpec;
 import iterator.Iterator;
 import iterator.RelSpec;
 
 import static global.GlobalConst.NUMBUF;
+import static global.SystemDefs.JavabaseBM;
 
 public class Query
 {
@@ -77,17 +79,15 @@ public class Query
             System.out.println("QA: " + vector_field_number + ", D: " + distance + ", target vector: " + Arrays.toString(target_vector.vector));
             System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
 
-            if (index_option.equals("Y"))
-            {
-                // TO DO:
-                // USE LSHFindex for processing.
-            }
-            else
-            {
-                // TO DO:
-                // DO NOT USE LSHF index for processing.
-            }
+            FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
+            IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
 
+            scan = new RSIndexScan(
+//                    Choose to use LSHFIndex or not
+                    index_option.equals("Y") ? new IndexType(IndexType.Lsh) : null,
+                    null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null,
+                    vector_field_number, target_vector, distance
+            );
         }
         else if (query_specification.startsWith("NN("))
         {
