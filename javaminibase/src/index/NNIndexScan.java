@@ -1,0 +1,99 @@
+package index;
+
+import LSHFIndex.LSHFIndex;
+import global.*;
+import heap.Heapfile;
+import heap.Tuple;
+import iterator.*;
+import scripts.BatchInsert;
+
+import java.io.IOException;
+import java.util.stream.IntStream;
+
+public class NNIndexScan extends Iterator {
+
+    private final Vector100Dtype target;
+    private final Tuple targetTuple;
+    private final LSHFIndex lshfIndex;
+    private final AttrType[] attrTypes;
+    private final short numAttributes;
+    private final short[] strLengths;
+    private final int vectorFieldNumber;
+    private final FldSpec[] projList;
+    private final int numAttributesOut;
+
+    private Heapfile unionFile;
+    private FileScan unionFileScan;
+    private Sort sort;
+    private int count;
+
+    private final Tuple outTuple;
+
+    public NNIndexScan(IndexType index,
+                java.lang.String relName, java.lang.String indName,
+                AttrType[] types, short[] str_sizes, int noInFlds,
+                int noOutFlds, FldSpec[] outFlds,
+                CondExpr[] selects,
+                int fldNum,
+                Vector100Dtype query, int count) throws Exception {
+
+        if(index.indexType != IndexType.Lsh)
+            throw new RuntimeException("NNIndexScan can only be used with index type LSH");
+
+        target = query;
+        targetTuple = new Tuple();
+        targetTuple.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrVector100D)}, new short[0]);
+        targetTuple.set100DVectFld(1, target);
+
+        lshfIndex = new LSHFIndex(fldNum);
+        attrTypes = types;
+        numAttributes = (short)noInFlds;
+        strLengths = str_sizes;
+        vectorFieldNumber = fldNum;
+        this.count = count;
+        projList = outFlds;
+        numAttributesOut = noOutFlds;
+
+        outTuple = new Tuple();
+        TupleUtils.setup_op_tuple(outTuple, new AttrType[noOutFlds], attrTypes, numAttributes, strLengths, projList, numAttributesOut);
+    }
+
+    @Override
+    public Tuple get_next() throws Exception {
+        if(unionFile == null) {
+//            Called first time
+            unionFile = lshfIndex.union(target, attrTypes, numAttributes, strLengths, new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME));
+
+            FldSpec[] projlist= new FldSpec[numAttributes];
+            IntStream.range(0, numAttributes).forEach(i -> projlist[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
+            unionFileScan = new FileScan(LSHFIndex.UNION_DUMP_HEAP_FILE_NAME, attrTypes, strLengths, numAttributes, numAttributes, projlist, null);
+
+//            TODO Pass a good number of buffers
+            sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, 12, target, 0);
+        }
+
+        Tuple currentTuple = sort.get_next();
+        if((currentTuple == null) || (count <= 0))
+            return null;
+        count--;
+
+//        DEBUG - Uncomment to see distance from target
+//        int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, currentTuple, vectorFieldNumber);
+//        System.out.println("Distance from Target = " + distance);
+
+        currentTuple.setHdr(numAttributes, attrTypes, strLengths);
+        Projection.Project(currentTuple, attrTypes, outTuple, projList, numAttributesOut);
+        return outTuple;
+    }
+
+    @Override
+    public void close() {
+        try {
+//            TODO Fix sort.close()
+//            sort.close();
+            unionFileScan.close();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+}

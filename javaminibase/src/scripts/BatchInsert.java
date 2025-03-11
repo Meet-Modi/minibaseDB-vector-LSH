@@ -16,6 +16,8 @@ import static global.SystemDefs.JavabaseBM;
 public class BatchInsert implements GlobalConst
 {
     public static final String DB_DATA_METADATA_HEAP_FILE_NAME = "dataFileMetaData";
+    public static final String DB_DATA_HEAP_FILE_NAME = "dataFile";
+    public static final short MAX_STRING_LENGTH = 64;
 
     public static void main(String[] args) throws Exception {
         if (args.length != 4)
@@ -29,16 +31,11 @@ public class BatchInsert implements GlobalConst
         int num_hashes = Integer.parseInt(args[0]);
         int num_layers = Integer.parseInt(args[1]);
         String dataFilePath = args[2];
-        String data_file_name = Paths.get(args[2]).getFileName().toString();
         String database_name = args[3];
 
 
         // create the database with database_name.
-        String dbpath;
-        String logpath;
-
-        dbpath = "/tmp/"  + System.getProperty("user.name") + "."+ database_name + "-db";
-        logpath = "/tmp/" + System.getProperty("user.name") + "." + database_name+ "-log";
+        String dbpath = getDbFileSystemPath(database_name);
 
         SystemDefs systemDefs = new SystemDefs(dbpath, NUMBUF,NUMBUF, "Clock");
 
@@ -118,14 +115,11 @@ public class BatchInsert implements GlobalConst
         // Create dummy tuple to convert data from data_file_name to tuples.
         Tuple t = new Tuple();
 
-        // We may have to take this from user input.
-        short max_string_length = 64;
-
         // For each string attribute, define max length of string attribute.
         short[] string_lengths = new short[string_attribute_count];
         for  (int i = 0; i < string_attribute_count; i++ )
         {
-            string_lengths[i] = max_string_length;
+            string_lengths[i] = MAX_STRING_LENGTH;
         }
 
         // Set the tuple header based on the data_file_name specification.
@@ -138,7 +132,7 @@ public class BatchInsert implements GlobalConst
         // from data_file_name, and initialize tuples and insert into heapfile.
 
         // Create a new heap file called data_file
-        Heapfile file = new Heapfile(data_file_name);
+        Heapfile file = new Heapfile(DB_DATA_HEAP_FILE_NAME);
         RID rid = new RID();
         String tuple_value;
         boolean end_of_file = false;
@@ -206,6 +200,10 @@ public class BatchInsert implements GlobalConst
         }
 
         JavabaseBM.flushAllPages();
+    }
+
+    static String getDbFileSystemPath(String dbName) {
+        return "/tmp/"  + System.getProperty("user.name") + "."+ dbName + "-db";
     }
 }
 

@@ -1,7 +1,5 @@
 package global;
 
-import LSHFIndex.Layer;
-
 import java.util.Arrays;
 
 public class Vector100Dtype
@@ -51,4 +49,8 @@ public class Vector100Dtype
         return Arrays.equals(this.vector, ((Vector100Dtype)obj).vector);
     }
 
+    @Override
+    public String toString() {
+        return Arrays.toString(vector);
+    }
 }

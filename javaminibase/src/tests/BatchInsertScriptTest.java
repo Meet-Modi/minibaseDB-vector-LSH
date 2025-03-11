@@ -22,11 +22,10 @@ import java.util.stream.IntStream;
 
 import static global.GlobalConst.NUMBUF;
 
-public class ScriptTest {
+public class BatchInsertScriptTest {
 
 //    1) SET TEST CONSTANTS HERE
-    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/combinedSampleData.txt";
-    static String INPUT_FILE_NAME = Paths.get(INPUT_FILE_PATH).getFileName().toString();
+    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt";
     static String DB_NAME = "batchInsertTest1";
     static int VECTOR_lENGTH = 100;
     static String NUM_HASHES = "5";
@@ -52,7 +51,6 @@ public class ScriptTest {
         createNewDb();
 //        readHeapFile();
 
-//        TODO Move all tests under restart db to Query Script test. This file should only test batchInsert and methods related to createDb.
 //        restartOldDb();
 
         testSortOnExistingDb();
@@ -94,7 +92,7 @@ public class ScriptTest {
                         " attr type from data file - " + attrTypes[i] + " attr type from metadata file - " + metadataAttrTypes.get(i));
         }
 
-        Heapfile hf = new Heapfile(INPUT_FILE_NAME);
+        Heapfile hf = new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME);
         System.out.println("PASS - Create Db");
         System.out.println("Record Count in Heap File = " + hf.getRecCnt());
     }
@@ -106,7 +104,7 @@ public class ScriptTest {
         SystemDefs.MINIBASE_RESTART_FLAG = true;
         new SystemDefs(dbpath, NUMBUF, NUMBUF, "Clock");
 
-        Heapfile hf = new Heapfile(INPUT_FILE_NAME);
+        Heapfile hf = new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME);
         System.out.println("PASS - Restart Db");
         System.out.println("Record Count in Heap File = " + hf.getRecCnt());
     }
@@ -286,7 +284,7 @@ public class ScriptTest {
         prepareAttrTypesAndStrLengths();
         prepareProjList();
 
-        int totalRecordsInDataFile = new Heapfile(INPUT_FILE_NAME).getRecCnt();
+        int totalRecordsInDataFile = new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME).getRecCnt();
 
         Tuple targetTuple = new Tuple();
         targetTuple.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrVector100D)}, new short[0]);
@@ -295,7 +293,7 @@ public class ScriptTest {
         for(int vectorFieldNumber : vectorFieldNumbers) {
             LSHFIndex index = new LSHFIndex(vectorFieldNumber);
 
-            Heapfile unionFile = index.union(target, attrTypes, num_attributes, string_lengths, new Heapfile(INPUT_FILE_NAME));
+            Heapfile unionFile = index.union(target, attrTypes, num_attributes, string_lengths, new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME));
             System.out.println("Union File Record Count - " + unionFile.getRecCnt());
             if(unionFile.getRecCnt() > totalRecordsInDataFile)
 //                Duplicate elimination failing or you are not deleting and recreating union file before new union
@@ -338,7 +336,7 @@ public class ScriptTest {
         prepareAttrTypesAndStrLengths();
         prepareProjList();
 
-        return new FileScan(INPUT_FILE_NAME, attrTypes, string_lengths, num_attributes, num_attributes, projlist, null);
+        return new FileScan(BatchInsert.DB_DATA_HEAP_FILE_NAME, attrTypes, string_lengths, num_attributes, num_attributes, projlist, null);
     }
 
     private static void prepareAttrTypesAndStrLengths() throws IOException {
