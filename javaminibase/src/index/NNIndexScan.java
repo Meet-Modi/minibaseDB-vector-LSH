@@ -14,7 +14,7 @@ public class NNIndexScan extends Iterator {
 
     private final Vector100Dtype target;
     private final Tuple targetTuple;
-    private final LSHFIndex lshfIndex;
+    private LSHFIndex lshfIndex;
     private final AttrType[] attrTypes;
     private final short numAttributes;
     private final short[] strLengths;
@@ -22,7 +22,6 @@ public class NNIndexScan extends Iterator {
     private final FldSpec[] projList;
     private final int numAttributesOut;
 
-    private Heapfile unionFile;
     private FileScan unionFileScan;
     private Sort sort;
     private int count;
@@ -37,7 +36,7 @@ public class NNIndexScan extends Iterator {
                 int fldNum,
                 Vector100Dtype query, int count) throws Exception {
 
-        if(index.indexType != IndexType.Lsh)
+        if((index != null) && (index.indexType != IndexType.Lsh))
             throw new RuntimeException("NNIndexScan can only be used with index type LSH");
 
         target = query;
@@ -45,7 +44,6 @@ public class NNIndexScan extends Iterator {
         targetTuple.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrVector100D)}, new short[0]);
         targetTuple.set100DVectFld(1, target);
 
-        lshfIndex = new LSHFIndex(fldNum);
         attrTypes = types;
         numAttributes = (short)noInFlds;
         strLengths = str_sizes;
@@ -56,17 +54,24 @@ public class NNIndexScan extends Iterator {
 
         outTuple = new Tuple();
         TupleUtils.setup_op_tuple(outTuple, new AttrType[noOutFlds], attrTypes, numAttributes, strLengths, projList, numAttributesOut);
+
+        if(index != null)
+            lshfIndex = new LSHFIndex(fldNum);
     }
 
     @Override
     public Tuple get_next() throws Exception {
-        if(unionFile == null) {
+        if(unionFileScan == null) {
 //            Called first time
-            unionFile = lshfIndex.union(target, attrTypes, numAttributes, strLengths, new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME));
+            if(lshfIndex != null)
+                lshfIndex.union(target, new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME));
 
             FldSpec[] projlist= new FldSpec[numAttributes];
             IntStream.range(0, numAttributes).forEach(i -> projlist[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
-            unionFileScan = new FileScan(LSHFIndex.UNION_DUMP_HEAP_FILE_NAME, attrTypes, strLengths, numAttributes, numAttributes, projlist, null);
+            unionFileScan = new FileScan(
+                    (lshfIndex != null) ? LSHFIndex.UNION_DUMP_HEAP_FILE_NAME : BatchInsert.DB_DATA_HEAP_FILE_NAME,
+                    attrTypes, strLengths, numAttributes, numAttributes, projlist, null
+            );
 
 //            TODO Pass a good number of buffers
             sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, 12, target, 0);

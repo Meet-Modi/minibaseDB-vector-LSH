@@ -311,7 +311,7 @@ public class LSHFIndex
         return binNames;
     }
 
-    public Heapfile union(Vector100Dtype inputVector, AttrType[] dataFileAttrTypes, short numDataFileAttributes, short[] dataFileStringSizes, Heapfile dataFile)
+    public Heapfile union(Vector100Dtype inputVector, Heapfile dataFile)
             throws
             Exception
     {

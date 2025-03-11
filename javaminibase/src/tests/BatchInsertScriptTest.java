@@ -293,7 +293,7 @@ public class BatchInsertScriptTest {
         for(int vectorFieldNumber : vectorFieldNumbers) {
             LSHFIndex index = new LSHFIndex(vectorFieldNumber);
 
-            Heapfile unionFile = index.union(target, attrTypes, num_attributes, string_lengths, new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME));
+            Heapfile unionFile = index.union(target, new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME));
             System.out.println("Union File Record Count - " + unionFile.getRecCnt());
             if(unionFile.getRecCnt() > totalRecordsInDataFile)
 //                Duplicate elimination failing or you are not deleting and recreating union file before new union

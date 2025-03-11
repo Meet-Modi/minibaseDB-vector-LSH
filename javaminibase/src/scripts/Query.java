@@ -116,20 +116,15 @@ public class Query
             System.out.println("QA (vectorFieldNumber): " + vector_field_number + ", K: " + number_of_nearest_neighbors + ", target vector: " + Arrays.toString(target_vector.vector));
             System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
 
-            if (index_option.equals("Y"))
-            {
-                // USE LSHFindex for processing.
-                FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
-                IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
+            FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
+            IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
 
-                scan = new NNIndexScan(new IndexType(IndexType.Lsh), null, null, attrTypes, strLengths,
-                        numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, number_of_nearest_neighbors);
-            }
-            else
-            {
-                // TO DO:
-                // DO NOT USE LSHF index for processing.
-            }
+            scan = new NNIndexScan(
+//                    Choose to use LSHFIndex or not
+                    index_option.equals("Y") ? new IndexType(IndexType.Lsh) : null,
+                    null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null,
+                    vector_field_number, target_vector, number_of_nearest_neighbors
+            );
         }
         else
         {
