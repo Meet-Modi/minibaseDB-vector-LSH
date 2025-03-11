@@ -1,6 +1,7 @@
 package bufmgr;
 
 import global.*;
+import iterator.Sort;
 
 /**
  * This interface assocaites with the replace algorithm,
@@ -92,8 +93,17 @@ abstract class Replacer implements GlobalConst
 
         if ((mgr.frameTable())[frameNo].pin_count() > 1)
         {
-
-            throw new PagePinnedException(null, "BUFMGR: PAGE_PINNED.");
+            if (Sort.SORT_CLEANUP == true)
+            {
+                while((mgr.frameTable())[frameNo].pin_count() > 1)
+                {
+                    (mgr.frameTable())[frameNo].unpin();
+                }
+            }
+            else
+            {
+                throw new PagePinnedException(null, "BUFMGR: PAGE_PINNED.");
+            }
 
         }
 

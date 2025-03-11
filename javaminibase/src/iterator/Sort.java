@@ -14,6 +14,8 @@ import heap.*;
  */
 public class Sort extends Iterator implements GlobalConst
 {
+    public static boolean SORT_CLEANUP = false;
+
     private static final int ARBIT_RUNS = 10;
 
     private AttrType[] _in;
@@ -1065,6 +1067,7 @@ public class Sort extends Iterator implements GlobalConst
     public void close() throws SortException, IOException
     {
         // clean up
+        SORT_CLEANUP = true;
         if (!closeFlag)
         {
 
@@ -1092,14 +1095,18 @@ public class Sort extends Iterator implements GlobalConst
 
             for (int i = 0; i < temp_files.length; i++)
             {
+
                 if (temp_files[i] != null)
                 {
+
                     try
                     {
+
                         temp_files[i].deleteFile();
                     }
                     catch (Exception e)
                     {
+                        e.printStackTrace();
                         throw new SortException(e, "Sort.java: Heapfile error");
                     }
                     temp_files[i] = null;
@@ -1107,6 +1114,7 @@ public class Sort extends Iterator implements GlobalConst
             }
             closeFlag = true;
         }
+        SORT_CLEANUP = false;
     }
 
 }

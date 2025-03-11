@@ -25,7 +25,7 @@ import static global.GlobalConst.NUMBUF;
 public class ScriptTest {
 
 //    1) SET TEST CONSTANTS HERE
-    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt";
+    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/combinedSampleData.txt";
     static String INPUT_FILE_NAME = Paths.get(INPUT_FILE_PATH).getFileName().toString();
     static String DB_NAME = "batchInsertTest1";
     static int VECTOR_lENGTH = 100;
@@ -155,7 +155,7 @@ public class ScriptTest {
                 t = sort.get_next();
             }
 //            TODO Check code if we are closing all scans/sorts/iterators -> Fix sort.close
-//            sort.close();
+            sort.close();
             hfScan.close();
         }
 
