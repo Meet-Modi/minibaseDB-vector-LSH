@@ -22,9 +22,9 @@ import static global.SystemDefs.JavabaseBM;
 
 public class Query
 {
-    private static int numAttributes;
-    private static AttrType[] attrTypes;
-    private static short[] strLengths;
+    public static int numAttributes;
+    public static AttrType[] attrTypes;
+    public static short[] strLengths;
 
 
     private static int[] outputFieldNumbers;
@@ -33,7 +33,7 @@ public class Query
 
 //    TODO Figure out a good number here for sort
 //    TODO Make it bulletproof - Wrap all sorts/scans with try-catches and close no matter what
-    public static int numBuffersForSort = 3;
+    public static int numBuffersForSort = 5;
 
     public static void main(String[] args) throws Exception
     {
@@ -178,7 +178,7 @@ public class Query
         outputTupleAttrTypes = attrTypesList.toArray(new AttrType[0]);
     }
 
-    private static Vector100Dtype read_target_vector(String target_vector_file_name) throws Exception
+    public static Vector100Dtype read_target_vector(String target_vector_file_name) throws Exception
     {
         short[] vector = new short[100];
         Vector100Dtype target_vector;
@@ -203,7 +203,7 @@ public class Query
         return target_vector;
     }
 
-    private static void restartDb(String dbName, int numBuf) throws Exception {
+    public static void restartDb(String dbName, int numBuf) throws Exception {
 //        Restart Minibase
         SystemDefs.MINIBASE_RESTART_FLAG = true;
 //        TODO Set diskPage size based of Batch script. Will require stress testing to find a good number

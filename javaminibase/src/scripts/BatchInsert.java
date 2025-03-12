@@ -202,7 +202,7 @@ public class BatchInsert implements GlobalConst
         JavabaseBM.flushAllPages();
     }
 
-    static String getDbFileSystemPath(String dbName) {
+    public static String getDbFileSystemPath(String dbName) {
         return "/tmp/"  + System.getProperty("user.name") + "."+ dbName + "-db";
     }
 }
