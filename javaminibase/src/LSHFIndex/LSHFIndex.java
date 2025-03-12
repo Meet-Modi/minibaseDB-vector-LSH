@@ -4,6 +4,7 @@ import bufmgr.PageNotReadException;
 import global.*;
 import heap.*;
 import iterator.*;
+import scripts.Query;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -354,8 +355,7 @@ public class LSHFIndex
         // Call sort on dfRIDDump
         int sortFieldNumber = 3;
         TupleOrder sortOrder = new TupleOrder(TupleOrder.Ascending);
-        int sortNumPages = 12;  // not sure about this! Need to look and adjust accordingly.
-        Sort ridDumpSort = new Sort(RID_DUMP_TUPLE_ATTR_TYPES, (short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_STR_LENGTHS, ridDumpScan, sortFieldNumber, sortOrder, RID_DUMP_TUPLE_STR_LENGTHS[0], sortNumPages);
+        Sort ridDumpSort = new Sort(RID_DUMP_TUPLE_ATTR_TYPES, (short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_STR_LENGTHS, ridDumpScan, sortFieldNumber, sortOrder, RID_DUMP_TUPLE_STR_LENGTHS[0], Query.numBuffersForSort);
 
         // iterate over sorted RID_DUMP_HEAP_FILE
         // Ignore duplicates and add unique records to cleanRIDDump

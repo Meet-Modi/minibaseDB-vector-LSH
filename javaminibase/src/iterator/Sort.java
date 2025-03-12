@@ -837,6 +837,7 @@ public class Sort extends Iterator implements GlobalConst
         }
         catch (Exception e)
         {
+            e.printStackTrace();
             throw new SortException(e, "Sort.java: Heapfile error");
         }
 
@@ -1034,7 +1035,7 @@ public class Sort extends Iterator implements GlobalConst
 
             // generate runs
             Nruns = generate_runs(max_elems_in_heap, _in[_sort_fld - 1], sortFldLen);
-            //      System.out.println("Generated " + Nruns + " runs");
+                  System.out.println("Generated " + Nruns + " runs");
 
             // setup state to perform merge of runs.
             // Open input buffers for all the input file

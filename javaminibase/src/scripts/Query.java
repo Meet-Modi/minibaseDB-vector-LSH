@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
+import bufmgr.PagePinnedException;
 import global.*;
 import heap.Tuple;
 import index.NNIndexScan;
@@ -30,6 +31,10 @@ public class Query
     private static Iterator scan;
     private static AttrType[] outputTupleAttrTypes;
 
+//    TODO Figure out a good number here for sort
+//    TODO Make it bulletproof - Wrap all sorts/scans with try-catches and close no matter what
+    public static int numBuffersForSort = 3;
+
     public static void main(String[] args) throws Exception
     {
         if (args.length != 4)
@@ -48,7 +53,7 @@ public class Query
         String query_specification = br.readLine();
         if (query_specification == null)
         {
-            System.err.println("query_specificaion is null.");
+            System.err.println("query_specification is null.");
         }
         query_specification = query_specification.trim();
 
@@ -128,7 +133,7 @@ public class Query
         }
         else
         {
-            throw new RuntimeException("query_specificaion is not a valid query_specification.");
+            throw new RuntimeException("query_specification is not a valid query_specification.");
         }
 
 //        Iterate over scan
@@ -140,6 +145,10 @@ public class Query
             t = scan.get_next();
         }
         scan.close();
+
+        try {
+            JavabaseBM.flushAllPages();
+        } catch (PagePinnedException ignored) {}
     }
 
     private static void printOutputTuple(Tuple outTuple) throws Exception {

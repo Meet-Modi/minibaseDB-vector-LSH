@@ -8,6 +8,7 @@ import global.Vector100Dtype;
 import heap.*;
 import iterator.*;
 import scripts.BatchInsert;
+import scripts.Query;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -25,7 +26,7 @@ import static global.GlobalConst.NUMBUF;
 public class BatchInsertScriptTest {
 
 //    1) SET TEST CONSTANTS HERE
-    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt";
+    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/combinedSampleData.txt";
     static String DB_NAME = "batchInsertTest1";
     static int VECTOR_lENGTH = 100;
     static String NUM_HASHES = "5";
@@ -52,6 +53,8 @@ public class BatchInsertScriptTest {
 //        readHeapFile();
 
 //        restartOldDb();
+
+        Query.numBuffersForSort = 12;
 
         testSortOnExistingDb();
         testHashGeneration();
@@ -152,7 +155,6 @@ public class BatchInsertScriptTest {
 //                printTuple(t);
                 t = sort.get_next();
             }
-//            TODO Check code if we are closing all scans/sorts/iterators -> Fix sort.close
             sort.close();
             hfScan.close();
         }

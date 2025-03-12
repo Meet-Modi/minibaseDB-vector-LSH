@@ -6,6 +6,7 @@ import heap.Heapfile;
 import heap.Tuple;
 import iterator.*;
 import scripts.BatchInsert;
+import scripts.Query;
 
 import java.io.IOException;
 import java.util.stream.IntStream;
@@ -73,8 +74,7 @@ public class NNIndexScan extends Iterator {
                     attrTypes, strLengths, numAttributes, numAttributes, projlist, null
             );
 
-//            TODO Pass a good number of buffers
-            sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, 12, target, 0);
+            sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, Query.numBuffersForSort, target, 0);
         }
 
         Tuple currentTuple = sort.get_next();
