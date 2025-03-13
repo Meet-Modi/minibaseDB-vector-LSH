@@ -32,7 +32,7 @@ public class Query
     private static AttrType[] outputTupleAttrTypes;
 
 //    TODO Figure out a good number here for sort
-    public static int numBuffersForSort = 50;
+    public static int numBuffersForSort = 150;
 
     public static void main(String[] args) throws Exception
     {
