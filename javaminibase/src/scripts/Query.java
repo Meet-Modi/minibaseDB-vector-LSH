@@ -32,7 +32,7 @@ public class Query
     private static AttrType[] outputTupleAttrTypes;
 
 //    TODO Figure out a good number here for sort
-    public static int numBuffersForSort = 150;
+    public static int numBuffersForSort;
 
     public static void main(String[] args) throws Exception
     {
@@ -46,6 +46,8 @@ public class Query
         String index_option =  args[2];
         int num_buffers = Integer.parseInt(args[3]);
 
+//        Allocate 1/4th total buffers for sort
+        numBuffersForSort = num_buffers/4;
         restartDb(db_name, num_buffers);
 
         BufferedReader br = new BufferedReader(new FileReader(query_specification_file_name));

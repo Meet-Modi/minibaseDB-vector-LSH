@@ -21,7 +21,7 @@ import static global.SystemDefs.JavabaseBM;
 public class QueryScriptTest {
 
     static String QUERY_SPECIFICATION_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/nquery1.txt";
-    static String NUM_BUFFERS = "400";
+    static String NUM_BUFFERS = "1000";
 
 //      TODO Print disk I/O data
 

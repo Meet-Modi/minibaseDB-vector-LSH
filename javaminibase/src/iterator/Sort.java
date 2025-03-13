@@ -377,6 +377,7 @@ public class Sort extends Iterator implements GlobalConst
                 }
                 catch (Exception e)
                 {
+                    e.printStackTrace();
                     throw new SortException(e, "Sort.java: create Heapfile failed");
                 }
 

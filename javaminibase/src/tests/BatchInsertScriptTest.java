@@ -26,7 +26,7 @@ import static global.GlobalConst.NUMBUF;
 public class BatchInsertScriptTest {
 
 //    1) SET TEST CONSTANTS HERE
-    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt";
+    static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/sample50_000.txt";
     static String DB_NAME = "batchInsertTest1";
     static int VECTOR_lENGTH = 100;
     static String NUM_HASHES = "5";
@@ -47,7 +47,7 @@ public class BatchInsertScriptTest {
 //        2) PICK A TEST/TESTS. COMMENT OUT REST
 
 //        DB Independent Tests
-        testLshfIndexPreservationAndRestore();
+//        testLshfIndexPreservationAndRestore();
 
         createNewDb();
 //        readHeapFile();

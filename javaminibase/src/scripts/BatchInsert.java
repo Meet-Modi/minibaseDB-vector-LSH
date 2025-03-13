@@ -18,7 +18,7 @@ public class BatchInsert implements GlobalConst
     public static final String DB_DATA_METADATA_HEAP_FILE_NAME = "dataFileMetaData";
     public static final String DB_DATA_HEAP_FILE_NAME = "dataFile";
     public static final short MAX_STRING_LENGTH = 64;
-    public static final int DB_SIZE_IN_PAGES = NUMBUF * 2;
+    public static final int DB_SIZE_IN_PAGES = NUMBUF * 10;
 
     public static void main(String[] args) throws Exception {
         if (args.length != 4)
@@ -38,7 +38,7 @@ public class BatchInsert implements GlobalConst
         // create the database with database_name.
         String dbpath = getDbFileSystemPath(database_name);
 
-        SystemDefs systemDefs = new SystemDefs(dbpath, DB_SIZE_IN_PAGES,NUMBUF, "Clock");
+        new SystemDefs(dbpath, DB_SIZE_IN_PAGES, DB_SIZE_IN_PAGES, "Clock");
 
         short string_attribute_count = 0;
         final ArrayList<Integer> vectorFieldNumbers = new ArrayList<>();
