@@ -256,7 +256,8 @@ public class LSHFIndex
             // Initialize layer[i] with the new values.
             layers[i] = new Layer(projVectors, shifts, binLength);
         }
-
+        metaScan.close();
+        stateScan.close();
     }
 
 
@@ -323,7 +324,7 @@ public class LSHFIndex
         // attr[1] - slotNo
 
         // Dump all the record ID's from all the bins into ridDump
-        Heapfile ridDump = new Heapfile(RID_DUMP_HEAP_FILE_NAME);
+        Heapfile ridDump = openDeleteAndOpenHeapFile(RID_DUMP_HEAP_FILE_NAME);
         for (String hash : hashValues)
         {
             FileScan binScan = new FileScan(hash, BIN_TUPLE_ATTR_TYPES, new short[0], (short) BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_PROJ_LIST, null);
@@ -355,23 +356,27 @@ public class LSHFIndex
         // Call sort on dfRIDDump
         int sortFieldNumber = 3;
         TupleOrder sortOrder = new TupleOrder(TupleOrder.Ascending);
+        Heapfile cleanRidDump = openDeleteAndOpenHeapFile(CLEAN_RID_DUMP_HEAP_FILE_NAME);
         Sort ridDumpSort = new Sort(RID_DUMP_TUPLE_ATTR_TYPES, (short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_STR_LENGTHS, ridDumpScan, sortFieldNumber, sortOrder, RID_DUMP_TUPLE_STR_LENGTHS[0], Query.numBuffersForSort);
+        try {
+            // iterate over sorted RID_DUMP_HEAP_FILE
+            // Ignore duplicates and add unique records to cleanRIDDump
+            Tuple sortedRidDumpTuple = ridDumpSort.get_next();
+            String prevUniqueID = "";
+            while (sortedRidDumpTuple != null) {
 
-        // iterate over sorted RID_DUMP_HEAP_FILE
-        // Ignore duplicates and add unique records to cleanRIDDump
-        Tuple sortedRidDumpTuple = ridDumpSort.get_next();
-        Heapfile cleanRidDump = new Heapfile(CLEAN_RID_DUMP_HEAP_FILE_NAME);
-        String prevUniqueID = "";
-        while (sortedRidDumpTuple != null)
-        {
+                String currentUniqueID = sortedRidDumpTuple.getStrFld(3);
 
-            String currentUniqueID = sortedRidDumpTuple.getStrFld(3);
-
-            // if currentUniqueID != prevUniqueID add to
-            if (!(prevUniqueID.equals(currentUniqueID)))
-                cleanRidDump.insertRecord(sortedRidDumpTuple.getTupleByteArray());
-            prevUniqueID = currentUniqueID;
-            sortedRidDumpTuple = ridDumpSort.get_next();
+                // if currentUniqueID != prevUniqueID add to
+                if (!(prevUniqueID.equals(currentUniqueID)))
+                    cleanRidDump.insertRecord(sortedRidDumpTuple.getTupleByteArray());
+                prevUniqueID = currentUniqueID;
+                sortedRidDumpTuple = ridDumpSort.get_next();
+            }
+        } finally {
+            ridDumpSort.close();
+            ridDumpScan.close();
+            ridDump.deleteFile();
         }
 
         // Read from CLEAN_RID_DUMP_HEAP_FILE, extract the tuple for that RID in the Data File, insert into union dump.
@@ -382,9 +387,7 @@ public class LSHFIndex
 
         // Create delete create again.
         // Clearing previous unionDump and starting fresh.
-        Heapfile unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
-        unionDump.deleteFile();
-        unionDump = new Heapfile(UNION_DUMP_HEAP_FILE_NAME);
+        Heapfile unionDump = openDeleteAndOpenHeapFile(UNION_DUMP_HEAP_FILE_NAME);
 
         while (cleanRidTuple != null)
         {
@@ -396,12 +399,8 @@ public class LSHFIndex
             cleanRidTuple = cleanRidScan.get_next();
         }
 
-        ridDump.deleteFile();
-        cleanRidDump.deleteFile();
-        ridDumpSort.close();
-
-        ridDumpScan.close();
         cleanRidScan.close();
+        cleanRidDump.deleteFile();
 
         return unionDump;
     }
@@ -419,6 +418,12 @@ public class LSHFIndex
                 (this.noOfHashFunctionsPerLayer == otherIndex.noOfHashFunctionsPerLayer) &&
                 (this.attributeColumnNumber == otherIndex.attributeColumnNumber) &&
                 (Arrays.equals(this.layers, otherIndex.layers)));
+    }
+
+    private Heapfile openDeleteAndOpenHeapFile(String fileName) throws Exception {
+        Heapfile hf = new Heapfile(fileName);
+        hf.deleteFile();
+        return new Heapfile(fileName);
     }
 
 }

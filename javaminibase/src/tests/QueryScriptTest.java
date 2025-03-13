@@ -20,7 +20,7 @@ import static global.SystemDefs.JavabaseBM;
 
 public class QueryScriptTest {
 
-    static String QUERY_SPECIFICATION_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/rquery1.txt";
+    static String QUERY_SPECIFICATION_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/nquery1.txt";
     static String NUM_BUFFERS = "15";
 
 //      TODO Print disk I/O data
@@ -30,19 +30,19 @@ public class QueryScriptTest {
     public static void main(String[] args) throws Exception {
 //        Pick 1) or 2). Comment out the other
 //        1) Custom test
-        Query.main(new String[]{BatchInsertScriptTest.DB_NAME, QUERY_SPECIFICATION_FILE_PATH, "Y", NUM_BUFFERS});
+//        Query.main(new String[]{BatchInsertScriptTest.DB_NAME, QUERY_SPECIFICATION_FILE_PATH, "Y", NUM_BUFFERS});
 
 //        2) Predefined Tests
-//        Query.restartDb(BatchInsertScriptTest.DB_NAME, Integer.parseInt(NUM_BUFFERS));
-//
-//        testNoIndexNnSearch();
-//        testNoIndexRsSearch();
-//        testWithIndexNnScan();
-//        testWithIndexRsScan();
-//
-//        try {
-//            JavabaseBM.flushAllPages();
-//        } catch (PagePinnedException ignored) {}
+        Query.restartDb(BatchInsertScriptTest.DB_NAME, Integer.parseInt(NUM_BUFFERS));
+
+        testNoIndexNnSearch();
+        testNoIndexRsSearch();
+        testWithIndexNnScan();
+        testWithIndexRsScan();
+
+        try {
+            JavabaseBM.flushAllPages();
+        } catch (PagePinnedException ignored) {}
     }
 
     private static void testNoIndexNnSearch() throws Exception {

@@ -77,17 +77,24 @@ public class NNIndexScan extends Iterator {
             sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, Query.numBuffersForSort, target, 0);
         }
 
-        Tuple currentTuple = sort.get_next();
-        if((currentTuple == null) || (count <= 0))
-            return null;
-        count--;
+        try {
+            Tuple currentTuple = sort.get_next();
+            if((currentTuple == null) || (count <= 0))
+                return null;
+            count--;
 
 //        DEBUG - Uncomment to see distance from target
 //        int distance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, currentTuple, vectorFieldNumber);
 //        System.out.println("Distance from Target = " + distance);
 
-        currentTuple.setHdr(numAttributes, attrTypes, strLengths);
-        Projection.Project(currentTuple, attrTypes, outTuple, projList, numAttributesOut);
+            currentTuple.setHdr(numAttributes, attrTypes, strLengths);
+            Projection.Project(currentTuple, attrTypes, outTuple, projList, numAttributesOut);
+        } catch (Exception e) {
+            sort.close();
+            unionFileScan.close();
+            throw e;
+        }
+
         return outTuple;
     }
 

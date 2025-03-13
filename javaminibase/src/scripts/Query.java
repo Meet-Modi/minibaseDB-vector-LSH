@@ -32,7 +32,6 @@ public class Query
     private static AttrType[] outputTupleAttrTypes;
 
 //    TODO Figure out a good number here for sort
-//    TODO Make it bulletproof - Wrap all sorts/scans with try-catches and close no matter what
     public static int numBuffersForSort = 5;
 
     public static void main(String[] args) throws Exception
@@ -136,19 +135,21 @@ public class Query
             throw new RuntimeException("query_specification is not a valid query_specification.");
         }
 
-//        Iterate over scan
-        prepareOutputTupleAttrTypes();
-
-        Tuple t = scan.get_next();
-        while(t != null) {
-            printOutputTuple(t);
-            t = scan.get_next();
-        }
-        scan.close();
-
         try {
-            JavabaseBM.flushAllPages();
-        } catch (PagePinnedException ignored) {}
+//        Iterate over scan
+            prepareOutputTupleAttrTypes();
+
+            Tuple t = scan.get_next();
+            while (t != null) {
+                printOutputTuple(t);
+                t = scan.get_next();
+            }
+            scan.close();
+        } finally {
+            try {
+                JavabaseBM.flushAllPages();
+            } catch (PagePinnedException ignored) {}
+        }
     }
 
     private static void printOutputTuple(Tuple outTuple) throws Exception {

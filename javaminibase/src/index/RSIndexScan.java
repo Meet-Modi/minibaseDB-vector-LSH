@@ -83,18 +83,25 @@ public class RSIndexScan extends Iterator {
             sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, Query.numBuffersForSort, target, 0);
         }
 
-        Tuple currentTuple = sort.get_next();
-        if(currentTuple == null)
-            return null;
-        int currDistance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, currentTuple, vectorFieldNumber);
-        if(currDistance > maxDistance)
-            return null;
+        try {
+            Tuple currentTuple = sort.get_next();
+            if(currentTuple == null)
+                return null;
+            int currDistance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), targetTuple, 1, currentTuple, vectorFieldNumber);
+            if(currDistance > maxDistance)
+                return null;
 
 //        DEBUG - Uncomment to see distance from target
 //        System.out.println("Distance from Target = " + currDistance);
 
-        currentTuple.setHdr(numAttributes, attrTypes, strLengths);
-        Projection.Project(currentTuple, attrTypes, outTuple, projList, numAttributesOut);
+            currentTuple.setHdr(numAttributes, attrTypes, strLengths);
+            Projection.Project(currentTuple, attrTypes, outTuple, projList, numAttributesOut);
+        } catch (Exception e) {
+            sort.close();
+            unionFileScan.close();
+            throw e;
+        }
+
         return outTuple;
     }
 
