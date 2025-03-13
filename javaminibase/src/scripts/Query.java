@@ -32,7 +32,7 @@ public class Query
     private static AttrType[] outputTupleAttrTypes;
 
 //    TODO Figure out a good number here for sort
-    public static int numBuffersForSort = 5;
+    public static int numBuffersForSort = 50;
 
     public static void main(String[] args) throws Exception
     {
@@ -116,7 +116,7 @@ public class Query
             Vector100Dtype target_vector = read_target_vector(target_vector_file_name);
 
             // Print the query details
-            System.out.println("Range Query Parsed:");
+            System.out.println("NN Query Parsed:");
             System.out.println("QA (vectorFieldNumber): " + vector_field_number + ", K: " + number_of_nearest_neighbors + ", target vector: " + Arrays.toString(target_vector.vector));
             System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
 

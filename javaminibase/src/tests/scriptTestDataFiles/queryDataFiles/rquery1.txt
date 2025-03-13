@@ -1,1 +1,1 @@
-Range(2, ./javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/target1.txt, 1, 1, 2)
+Range(4, ./javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/target1.txt, 50000, 3, 4)
