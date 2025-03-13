@@ -207,8 +207,7 @@ public class Query
     public static void restartDb(String dbName, int numBuf) throws Exception {
 //        Restart Minibase
         SystemDefs.MINIBASE_RESTART_FLAG = true;
-//        TODO Set diskPage size based of Batch script. Will require stress testing to find a good number
-        new SystemDefs(BatchInsert.getDbFileSystemPath(dbName), NUMBUF, numBuf, "Clock");
+        new SystemDefs(BatchInsert.getDbFileSystemPath(dbName), BatchInsert.DB_SIZE_IN_PAGES, numBuf, "Clock");
 
 //        Parse Db Meta data
         FileScan dbMetadataScan = new FileScan(BatchInsert.DB_DATA_METADATA_HEAP_FILE_NAME,

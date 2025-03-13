@@ -18,6 +18,7 @@ public class BatchInsert implements GlobalConst
     public static final String DB_DATA_METADATA_HEAP_FILE_NAME = "dataFileMetaData";
     public static final String DB_DATA_HEAP_FILE_NAME = "dataFile";
     public static final short MAX_STRING_LENGTH = 64;
+    public static final int DB_SIZE_IN_PAGES = NUMBUF * 2;
 
     public static void main(String[] args) throws Exception {
         if (args.length != 4)
@@ -37,7 +38,7 @@ public class BatchInsert implements GlobalConst
         // create the database with database_name.
         String dbpath = getDbFileSystemPath(database_name);
 
-        SystemDefs systemDefs = new SystemDefs(dbpath, NUMBUF,NUMBUF, "Clock");
+        SystemDefs systemDefs = new SystemDefs(dbpath, DB_SIZE_IN_PAGES,NUMBUF, "Clock");
 
         short string_attribute_count = 0;
         final ArrayList<Integer> vectorFieldNumbers = new ArrayList<>();
@@ -177,10 +178,10 @@ public class BatchInsert implements GlobalConst
                         Vector100Dtype input_vector100D = new Vector100Dtype();
                         vectorsInDataLine.add(input_vector100D);
 
-                        String[] tupleValueSplit = tuple_value.split(" ");
+                        String[] tupleValueSplit = tuple_value.split("\\s+");
                         for (int j = 0; j < 100; j++)
                         {
-                            input_vector100D.vector[j] = Short.parseShort(tupleValueSplit[j]);
+                            input_vector100D.vector[j] = (short) Float.parseFloat(tupleValueSplit[j]);
                         }
                         t.set100DVectFld(i+1, input_vector100D);
                         break;
