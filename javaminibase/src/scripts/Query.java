@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.stream.IntStream;
 
 import bufmgr.PagePinnedException;
+import diskmgr.Pcounter;
 import global.*;
 import heap.Tuple;
 import index.NNIndexScan;
@@ -48,6 +49,7 @@ public class Query
 //        Allocate 1/4th total buffers for sort
         numBuffersForSort = num_buffers/4;
         restartDb(db_name, num_buffers);
+        Pcounter.initialize();
 
         BufferedReader br = new BufferedReader(new FileReader(query_specification_file_name));
         String query_specification = br.readLine();
@@ -151,6 +153,8 @@ public class Query
                 JavabaseBM.flushAllPages();
             } catch (PagePinnedException ignored) {}
         }
+
+        Pcounter.printPcounter();
     }
 
     private static void printOutputTuple(Tuple outTuple) throws Exception {

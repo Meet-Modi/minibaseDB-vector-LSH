@@ -1,5 +1,6 @@
 package scripts;
 
+import diskmgr.Pcounter;
 import global.SystemDefs;
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -39,6 +40,7 @@ public class BatchInsert implements GlobalConst
         String dbpath = getDbFileSystemPath(database_name);
 
         new SystemDefs(dbpath, DB_SIZE_IN_PAGES, DB_SIZE_IN_PAGES, "Clock");
+        Pcounter.initialize();
 
         short string_attribute_count = 0;
         final ArrayList<Integer> vectorFieldNumbers = new ArrayList<>();
@@ -201,6 +203,9 @@ public class BatchInsert implements GlobalConst
         }
 
         JavabaseBM.flushAllPages();
+
+        System.out.println("DB Creation Complete.");
+        Pcounter.printPcounter();
 
 //        Without this sample run (It must be without using an index), running Query.java later can throw a Heapfile creation exception later
 //
