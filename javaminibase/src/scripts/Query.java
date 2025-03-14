@@ -31,7 +31,6 @@ public class Query
     private static Iterator scan;
     private static AttrType[] outputTupleAttrTypes;
 
-//    TODO Figure out a good number here for sort
     public static int numBuffersForSort;
 
     public static void main(String[] args) throws Exception

@@ -201,6 +201,17 @@ public class BatchInsert implements GlobalConst
         }
 
         JavabaseBM.flushAllPages();
+
+//        Without this sample run (It must be without using an index), running Query.java later can throw a Heapfile creation exception later
+//
+//        This is an intermittent exception that occurs only when the allotted buffers are low in Query.java. The exception causes an irregular
+//        termination and since Query.java flushes all pages, future runs are never successful as the tempFile directory page gets corrupt. This
+//        causes all future calls to Sort to fail
+//
+//        However running a no-index query successfully (Allot a high number of buffers) seems to not cause this Exception to arise in future
+//        runs. I am not sure why the Exception is raised and why this suppresses it
+        System.out.println("DB Creation Complete. Running sample query...");
+        Query.main(new String[]{database_name, "./javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/nquery1.txt", "N", String.valueOf(DB_SIZE_IN_PAGES)});
     }
 
     public static String getDbFileSystemPath(String dbName) {
