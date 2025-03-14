@@ -29,8 +29,8 @@ public class BatchInsertScriptTest {
     static String INPUT_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt";
     static String DB_NAME = "batchInsertTest1";
     static int VECTOR_lENGTH = 100;
-    static String NUM_HASHES = "5";
-    static String NUM_LAYERS = "3";
+    static String NUM_HASHES = "6";
+    static String NUM_LAYERS = "6";
 
 
     static AttrType[] attrTypes;

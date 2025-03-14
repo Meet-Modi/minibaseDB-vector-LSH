@@ -7,6 +7,7 @@ import heap.Tuple;
 import iterator.*;
 import scripts.BatchInsert;
 import scripts.Query;
+import scripts.ScriptMetrics;
 
 import java.io.IOException;
 import java.util.stream.IntStream;
@@ -56,8 +57,11 @@ public class NNIndexScan extends Iterator {
         outTuple = new Tuple();
         TupleUtils.setup_op_tuple(outTuple, new AttrType[noOutFlds], attrTypes, numAttributes, strLengths, projList, numAttributesOut);
 
-        if(index != null)
+        if(index != null) {
+            ScriptMetrics.setTimeReinitializeLshIndexStart();
             lshfIndex = new LSHFIndex(fldNum);
+            ScriptMetrics.setTimeReinitializeLshIndexEnd();
+        }
     }
 
     @Override
@@ -74,6 +78,7 @@ public class NNIndexScan extends Iterator {
                     attrTypes, strLengths, numAttributes, numAttributes, projlist, null
             );
 
+            ScriptMetrics.setNumberOfTuplesToSort(new Heapfile((lshfIndex != null) ? LSHFIndex.UNION_DUMP_HEAP_FILE_NAME : BatchInsert.DB_DATA_HEAP_FILE_NAME).getRecCnt());
             sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, Query.numBuffersForSort, target, 0);
         }
 

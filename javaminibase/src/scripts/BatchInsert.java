@@ -206,6 +206,7 @@ public class BatchInsert implements GlobalConst
 
         System.out.println("DB Creation Complete.");
         Pcounter.printPcounter();
+        System.out.println("---Ignore beyond this---");
 
 //        Without this sample run (It must be without using an index), running Query.java later can throw a Heapfile creation exception later
 //

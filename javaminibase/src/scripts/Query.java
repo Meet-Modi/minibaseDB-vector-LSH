@@ -18,7 +18,6 @@ import iterator.FldSpec;
 import iterator.Iterator;
 import iterator.RelSpec;
 
-import static global.GlobalConst.NUMBUF;
 import static global.SystemDefs.JavabaseBM;
 
 public class Query
@@ -36,6 +35,8 @@ public class Query
 
     public static void main(String[] args) throws Exception
     {
+        ScriptMetrics.setTimeStarted();
+
         if (args.length != 4)
         {
             System.err.println("query requires 4 arguments.");
@@ -139,6 +140,7 @@ public class Query
         }
 
         try {
+            ScriptMetrics.setTimeDataSortStart();
 //        Iterate over scan
             prepareOutputTupleAttrTypes();
 
@@ -146,8 +148,10 @@ public class Query
             while (t != null) {
                 printOutputTuple(t);
                 t = scan.get_next();
+                ScriptMetrics.incrementNumberOfTuplesReturned();
             }
             scan.close();
+            ScriptMetrics.setTimeDataSortEnd();
         } finally {
             try {
                 JavabaseBM.flushAllPages();
@@ -155,6 +159,8 @@ public class Query
         }
 
         Pcounter.printPcounter();
+        ScriptMetrics.setTimeEnded();
+        ScriptMetrics.printMetricsReport();
     }
 
     private static void printOutputTuple(Tuple outTuple) throws Exception {

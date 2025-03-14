@@ -21,7 +21,7 @@ import static global.SystemDefs.JavabaseBM;
 public class QueryScriptTest {
 
     static String QUERY_SPECIFICATION_FILE_PATH = "./javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/nquery1.txt";
-    static String NUM_BUFFERS = "1000";
+    static String NUM_BUFFERS = "1500";
     
 //    RUN THIS AFTER RUNNING BatchInsertTests! DB file must be present for these tests to work
 
