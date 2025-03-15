@@ -50,8 +50,6 @@ public class ScriptMetrics {
         System.out.println("Number of Tuples to Sort = " + numberOfTuplesToSort);
 
         System.out.println("\nNumber of Tuples Returned = " + numberOfTuplesReturned);
-
-        System.out.println("\n\n\n\n\n\n\n\n");
     }
 
 

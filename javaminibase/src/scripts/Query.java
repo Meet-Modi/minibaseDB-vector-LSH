@@ -42,10 +42,10 @@ public class Query
             System.err.println("query requires 4 arguments.");
             System.exit(1);
         }
-        String db_name = args[0];
-        String query_specification_file_name = args[1];
-        String index_option =  args[2];
-        int num_buffers = Integer.parseInt(args[3]);
+        String db_name = args[0].trim();
+        String query_specification_file_name = args[1].trim();
+        String index_option =  args[2].trim();
+        int num_buffers = Integer.parseInt(args[3].trim());
 
 //        Allocate 1/4th total buffers for sort
         numBuffersForSort = num_buffers/4;
@@ -139,6 +139,7 @@ public class Query
             throw new RuntimeException("query_specification is not a valid query_specification.");
         }
 
+        System.out.println("\n ---Output Tuples---");
         try {
             ScriptMetrics.setTimeDataSortStart();
 //        Iterate over scan
@@ -157,6 +158,7 @@ public class Query
                 JavabaseBM.flushAllPages();
             } catch (PagePinnedException ignored) {}
         }
+        System.out.println("\n ---End Output---");
 
         Pcounter.printPcounter();
         ScriptMetrics.setTimeEnded();

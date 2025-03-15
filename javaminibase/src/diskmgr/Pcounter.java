@@ -24,7 +24,7 @@ public class Pcounter
 
     public static void printPcounter()
     {
-        System.out.println("Pages read (rcounter) : " + Pcounter.rcounter);
+        System.out.println("\n\nPages read (rcounter) : " + Pcounter.rcounter);
         System.out.println("Pages written (wcounter): " + Pcounter.wcounter);
     }
 
