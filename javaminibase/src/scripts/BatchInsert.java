@@ -4,7 +4,9 @@ import diskmgr.Pcounter;
 import global.SystemDefs;
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 
@@ -20,6 +22,9 @@ public class BatchInsert implements GlobalConst
     public static final String DB_DATA_HEAP_FILE_NAME = "dataFile";
     public static final short MAX_STRING_LENGTH = 64;
     public static final int DB_SIZE_IN_PAGES = NUMBUF * 10;
+
+    private static final String TEMP_QUERY_FILE_NAME = "tempNQuery.txt";
+    private static final String TEMP_TARGET_FILE_NAME = "tempNTarget.txt";
 
     public static void main(String[] args) throws Exception {
         if (args.length != 4)
@@ -217,11 +222,28 @@ public class BatchInsert implements GlobalConst
 //        However running a no-index query successfully (Allot a high number of buffers) seems to not cause this Exception to arise in future
 //        runs. I am not sure why the Exception is raised and why this suppresses it
         System.out.println("DB Creation Complete. Running sample query...");
-        Query.main(new String[]{database_name, "./javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/nquery1.txt", "N", String.valueOf(DB_SIZE_IN_PAGES)});
+        createTempQueryAndTargetFiles(vectorFieldNumbers.get(0));
+        Query.main(new String[]{database_name, TEMP_QUERY_FILE_NAME, "N", String.valueOf(DB_SIZE_IN_PAGES)});
+        deleteTempQueryAndTargetFiles();
     }
 
     public static String getDbFileSystemPath(String dbName) {
         return "/tmp/"  + System.getProperty("user.name") + "."+ dbName + "-db";
+    }
+
+    private static void createTempQueryAndTargetFiles(int vectorFieldNum) throws Exception {
+        FileWriter targetWriter = new FileWriter(TEMP_TARGET_FILE_NAME);
+        targetWriter.write("100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100\n");
+        targetWriter.close();
+
+        FileWriter queryWriter = new FileWriter(TEMP_QUERY_FILE_NAME);
+        queryWriter.write("NN(" + vectorFieldNum +","+ TEMP_TARGET_FILE_NAME +", 5,"+ vectorFieldNum +")");
+        queryWriter.close();
+    }
+
+    private static void deleteTempQueryAndTargetFiles() throws Exception {
+        Files.deleteIfExists(Paths.get(TEMP_TARGET_FILE_NAME));
+        Files.deleteIfExists(Paths.get(TEMP_QUERY_FILE_NAME));
     }
 }
 
