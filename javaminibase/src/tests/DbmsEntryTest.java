@@ -19,7 +19,8 @@ import java.util.function.Consumer;
 public class DbmsEntryTest {
 
     public static void main(String[] args) throws Exception {
-        testCreateNewDbCloseAndReopen();
+        // testCreateNewDbCloseAndReopen();
+        testBatchCreate();
     }
 
     private static void testCreateNewDbCloseAndReopen() throws Exception {
@@ -29,9 +30,9 @@ public class DbmsEntryTest {
         Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
         Files.deleteIfExists(Paths.get(getDbPath(dbNameTwo)));
 
-        DbmsEntry.handleDbOpenCommand(new String[]{SupportedCommands.OPEN_DB.getCommand(), dbNameOne});
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
 
-        if(! Files.exists(Paths.get(getDbPath(dbNameOne))))
+        if (!Files.exists(Paths.get(getDbPath(dbNameOne))))
             throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - DB file missing!");
 
         Consumer<Integer[]> insertDataToTestHeapFile = (numsToInsert) -> {
@@ -39,7 +40,7 @@ public class DbmsEntryTest {
                 Heapfile file = new Heapfile("testFile");
 
                 Tuple t = new Tuple();
-                t.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrInteger)}, null);
+                t.setHdr((short) 1, new AttrType[] { new AttrType(AttrType.attrInteger) }, null);
 
                 for (int i : numsToInsert) {
                     t.setIntFld(1, i);
@@ -50,43 +51,44 @@ public class DbmsEntryTest {
             }
         };
 
-//        Insert dummy data
-        insertDataToTestHeapFile.accept(new Integer[]{10, 20});
+        // Insert dummy data
+        insertDataToTestHeapFile.accept(new Integer[] { 10, 20 });
         DbmsEntry.handleDbCloseCommand();
 
-//        Open another Db
-        DbmsEntry.handleDbOpenCommand(new String[]{SupportedCommands.OPEN_DB.getCommand(), dbNameTwo});
-        insertDataToTestHeapFile.accept(new Integer[]{100, 200});
+        // Open another Db
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameTwo });
+        insertDataToTestHeapFile.accept(new Integer[] { 100, 200 });
         DbmsEntry.handleDbCloseCommand();
 
-//        Reopen DbOne
-        DbmsEntry.handleDbOpenCommand(new String[]{SupportedCommands.OPEN_DB.getCommand(), dbNameOne});
+        // Reopen DbOne
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
 
-//        Read dummy data from dbOne
+        // Read dummy data from dbOne
         Consumer<List<Integer>> readDataFromTestHeapFile = (expectedNums) -> {
             try {
                 Heapfile file = new Heapfile("testFile");
-                if(file.getRecCnt() != 2)
-                    throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - Heap file record count mismatch after reopening!");
+                if (file.getRecCnt() != 2)
+                    throw new RuntimeException(
+                            "FAIL - testCreateNewDbCloseAndReopen - Heap file record count mismatch after reopening!");
 
                 FileScan fileScan = new FileScan("testFile",
-                        new AttrType[]{new AttrType(AttrType.attrInteger)},
+                        new AttrType[] { new AttrType(AttrType.attrInteger) },
                         null,
-                        (short)1,
+                        (short) 1,
                         1,
-                        new FldSpec[] {new FldSpec(new RelSpec(RelSpec.outer), 1)},
-                        null
-                );
+                        new FldSpec[] { new FldSpec(new RelSpec(RelSpec.outer), 1) },
+                        null);
 
                 Tuple outTuple = fileScan.get_next();
                 ArrayList<Integer> results = new ArrayList<>();
-                while(outTuple != null) {
+                while (outTuple != null) {
                     results.add(outTuple.getIntFld(1));
                     outTuple = fileScan.get_next();
                 }
 
-                if(! results.equals(expectedNums))
-                    throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - File data mismatch after reopening!");
+                if (!results.equals(expectedNums))
+                    throw new RuntimeException(
+                            "FAIL - testCreateNewDbCloseAndReopen - File data mismatch after reopening!");
 
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -96,15 +98,39 @@ public class DbmsEntryTest {
         readDataFromTestHeapFile.accept(Arrays.asList(10, 20));
         DbmsEntry.handleDbCloseCommand();
 
-//      Read dummy data from dbTwo
-        DbmsEntry.handleDbOpenCommand(new String[]{SupportedCommands.OPEN_DB.getCommand(), dbNameTwo});
+        // Read dummy data from dbTwo
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameTwo });
 
         readDataFromTestHeapFile.accept(Arrays.asList(100, 200));
         DbmsEntry.handleDbCloseCommand();
     }
 
+    private static void testBatchCreate() throws Exception {
+        String dbNameOne = "testDb";
+        String dbNameTwo = "testDbTwo";
+
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameTwo)));
+
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+        if (!Files.exists(Paths.get(getDbPath(dbNameOne))))
+            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - DB file missing!");
+
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel2" });
+
+        DbmsEntry.handleDbCloseCommand();
+        System.out.println("****************");
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameTwo });
+        if (!Files.exists(Paths.get(getDbPath(dbNameTwo))))
+            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - DB file missing!");
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel2" });
+        DbmsEntry.handleDbCloseCommand();
+    }
+
     private static String getDbPath(String dbName) {
-        return "/tmp/"  + System.getProperty("user.name") + "."+ dbName + "-db";
+        return "/tmp/" + System.getProperty("user.name") + "." + dbName + "-db";
     }
 
 }
