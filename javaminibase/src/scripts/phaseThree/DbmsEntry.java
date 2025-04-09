@@ -2,7 +2,6 @@ package scripts.phaseThree;
 
 import diskmgr.Pcounter;
 import global.AttrType;
-import global.RID;
 import global.SystemDefs;
 import global.Vector100Dtype;
 import heap.FieldNumberOutOfBoundException;
@@ -21,7 +20,6 @@ import iterator.FldSpec;
 import iterator.InvalidRelation;
 import iterator.RelSpec;
 import iterator.TupleUtilsException;
-import scripts.BatchInsert;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -60,7 +58,7 @@ public class DbmsEntry {
             } else if (commandParts[0].equals(SupportedCommands.CLOSE_DB.getCommand())) {
                 handleDbCloseCommand();
             } else if (commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand())) {
-                handleBatchCreateCommand(commandParts);  
+                handleBatchCreateCommand(commandParts);
             } else {
                 System.out.println("Unrecognized command. Quitting...");
                 break;
@@ -89,6 +87,13 @@ public class DbmsEntry {
             SystemDefs.MINIBASE_RESTART_FLAG = true;
         }
         new SystemDefs(dbPath, DB_SIZE_IN_PAGES, DB_SIZE_IN_PAGES, "Clock");
+        try {
+            createOrOpenDbMetaDataFile(dbName);
+        } catch (Exception e) {
+            System.out.println("Error creating metadata file: " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
 
         System.out.println("Opened db " + dbName + " at " + dbPath);
         currentOpenDb = dbName;
@@ -129,16 +134,21 @@ public class DbmsEntry {
             return;
         }
 
-        if (Files.exists(Paths.get(getCurrentOpenDBRelDataFile(relName)))
-                || Files.exists(Paths.get(getCurrentOpenDBRelMetaDataFile(relName)))) {
-            System.out.println("Relation " + relName + " already exists. Please delete it first.");
+        try{
+            if (relExists(relName)) {
+                System.out.println("Relation " + relName + " already exists. Please delete it first.");
+                return;
+            }
+        } catch (Exception e) {
+            System.out.println("Error checking if relation exists: " + e.getMessage());
+            e.printStackTrace();
             return;
         }
-
+            
         Pcounter.initialize();
         System.out.println("Creating relation " + relName + " from file " + dataFilePath);
-        System.out.println("Metadata file path: " + getCurrentOpenDBRelMetaDataFile(relName));
-        System.out.println("Data file path: " + getCurrentOpenDBRelDataFile(relName));
+        System.out.println("Metadata file : " + getCurrentOpenDBRelMetaDataFile(relName));
+        System.out.println("Data file : " + getCurrentOpenDBRelDataFile(relName));
 
         BufferedReader br = new BufferedReader(new FileReader(dataFilePath));
         String line = br.readLine();
@@ -159,18 +169,12 @@ public class DbmsEntry {
             throw new IOException("Attribute count and number of attribute types provided mismatch");
         }
         try {
-            createMetaDataFile(relName, numAttributes, attributeTypes);
+            insertIntoDbMetaDataFile(relName);
+            createRelMetaDataFile(relName, numAttributes, attributeTypes);
             createDataFile(relName);
-        } catch (Exception e) {
-            System.out.println("Error creating metadata or data files: " + e.getMessage());
-            e.printStackTrace();
-            br.close();
-            return;
-        }
-        try {
             batchInsertDataIntoRel(br, relName, numAttributes, attributeTypes);
         } catch (Exception e) {
-            System.out.println("Error inserting data into relation: " + e.getMessage());
+            System.out.println("Error running batchcreate:  metadata or data files: " + e.getMessage());
             e.printStackTrace();
             br.close();
             return;
@@ -180,6 +184,51 @@ public class DbmsEntry {
     }
 
     // Helper methods
+    private static boolean relExists(String relName) throws IOException, FileScanException,
+            TupleUtilsException, InvalidRelation, Exception {
+        if (checkIfRelExistsInDbMetaDataFile(relName)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private static boolean checkIfRelExistsInDbMetaDataFile(String relName)
+            throws IOException, FileScanException, TupleUtilsException, InvalidRelation, Exception {
+        // No need to check if metadata file exists, as it is created when the db is opened
+
+        short[] stringLengths = new short[1];
+        stringLengths[0] = MAX_STRING_LENGTH;
+        FileScan dbMetaDataScan = new FileScan(getDbMetadataFile(currentOpenDb),
+                new AttrType[] { new AttrType(AttrType.attrString) }, stringLengths, (short) 1, 1,
+                new FldSpec[] { new FldSpec(new RelSpec(RelSpec.outer), 1) }, null);
+
+        Tuple t = dbMetaDataScan.get_next();
+        while (t != null) {
+            if (t.getStrFld(1).equals(relName)) {
+                dbMetaDataScan.close();
+                return true;
+            }
+            t = dbMetaDataScan.get_next();
+        }
+        dbMetaDataScan.close();
+        return false;
+    }
+
+    private static void insertIntoDbMetaDataFile(String relName) throws HFException, HFBufMgrException,
+            HFDiskMgrException, IOException, InvalidTypeException, InvalidTupleSizeException,
+            FieldNumberOutOfBoundException, InvalidSlotNumberException, SpaceNotAvailableException {
+        Heapfile dbMetaDataFile = new Heapfile(getDbMetadataFile(currentOpenDb));
+        AttrType[] dbmetaDataAttrTypes = new AttrType[1];
+        dbmetaDataAttrTypes[0] = new AttrType(AttrType.attrString);
+        short[] stringLengths = new short[1];
+        stringLengths[0] = MAX_STRING_LENGTH;
+        Tuple dbMetaDataTuple = new Tuple();
+        dbMetaDataTuple.setHdr((short) 1, dbmetaDataAttrTypes, stringLengths);
+        dbMetaDataTuple.setStrFld(1, relName);
+        dbMetaDataFile.insertRecord(dbMetaDataTuple.getTupleByteArray());
+    }
+
     private static void batchInsertDataIntoRel(BufferedReader br, String relName, short numAttributes,
             String[] attributeTypes)
             throws HFException, HFBufMgrException, HFDiskMgrException, FieldNumberOutOfBoundException,
@@ -196,7 +245,7 @@ public class DbmsEntry {
         int i = 0;
         while (t != null) {
             metadataAttrTypes[i] = new AttrType((t.getIntFld(1)));
-            if(metadataAttrTypes[i].attrType == AttrType.attrString) {
+            if (metadataAttrTypes[i].attrType == AttrType.attrString) {
                 stringAttributeCount++;
             }
             t = relMetaDataScan.get_next();
@@ -255,7 +304,8 @@ public class DbmsEntry {
             file.insertRecord(t.getTupleByteArray());
         }
         JavabaseBM.flushAllPages();
-        System.out.println("File " + getCurrentOpenDBRelDataFile(relName) + " created with " + file.getRecCnt() + " records.");
+        System.out.println(
+                "File " + getCurrentOpenDBRelDataFile(relName) + " created with " + file.getRecCnt() + " records.");
     }
 
     private static void createDataFile(String relName)
@@ -263,10 +313,10 @@ public class DbmsEntry {
         new Heapfile(getCurrentOpenDBRelDataFile(relName));
     }
 
-    private static void createMetaDataFile(String relName, short numAttributes, String[] attributeTypes)
+    private static void createRelMetaDataFile(String relName, short numAttributes, String[] attributeTypes)
             throws IOException, InvalidTypeException, InvalidTupleSizeException, HFException, HFBufMgrException,
             HFDiskMgrException, FieldNumberOutOfBoundException, InvalidSlotNumberException, SpaceNotAvailableException {
-        
+
         AttrType[] dbmetaDataAttrTypes = new AttrType[1];
         dbmetaDataAttrTypes[0] = new AttrType(AttrType.attrString);
         short[] stringLengths = new short[1];
@@ -274,10 +324,10 @@ public class DbmsEntry {
         Tuple dbMetaDataTuple = new Tuple();
         dbMetaDataTuple.setHdr((short) 1, dbmetaDataAttrTypes, stringLengths);
         dbMetaDataTuple.setStrFld(1, relName);
-        
-        Heapfile dbMetaDataFile = new Heapfile(getCurrentOpenDbMetadataFile());
+
+        Heapfile dbMetaDataFile = new Heapfile(getDbMetadataFile(currentOpenDb));
         dbMetaDataFile.insertRecord(dbMetaDataTuple.getTupleByteArray());
-        
+
         AttrType[] attrTypes = new AttrType[numAttributes];
 
         Tuple metaDataTuple = new Tuple();
@@ -308,6 +358,12 @@ public class DbmsEntry {
         }
     }
 
+    private static void createOrOpenDbMetaDataFile(String dbName)
+            throws HFException, HFBufMgrException, HFDiskMgrException, IOException {
+        new Heapfile(getDbMetadataFile(dbName));
+        return;
+    }
+
     private static String getDbMetaDataFileName(String dbName) {
         return dbName + "-db.metadata";
     }
@@ -320,8 +376,9 @@ public class DbmsEntry {
         return relName + ".data";
     }
 
-    private static String getCurrentOpenDbMetadataFile() {
-        return "/tmp/" + System.getProperty("user.name") + "." + currentOpenDb + "." + getDbMetaDataFileName(currentOpenDb);
+    private static String getDbMetadataFile(String dbName) {
+        return "/tmp/" + System.getProperty("user.name") + "." + dbName + "."
+                + getDbMetaDataFileName(dbName);
     }
 
     private static String getCurrentOpenDBRelMetaDataFile(String relName) {

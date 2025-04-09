@@ -19,7 +19,8 @@ import java.util.function.Consumer;
 public class DbmsEntryTest {
 
     public static void main(String[] args) throws Exception {
-        // testCreateNewDbCloseAndReopen();
+        testCreateNewDbCloseAndReopen();
+        System.out.println("****************");
         testBatchCreate();
     }
 
@@ -106,11 +107,14 @@ public class DbmsEntryTest {
     }
 
     private static void testBatchCreate() throws Exception {
+        System.out.println("This is a test for batch create, this first opens two databases, runs two batch inserts. Then again runs the same batch insert but this fails and exists");
+
+
         String dbNameOne = "testDb";
         String dbNameTwo = "testDbTwo";
 
-        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
-        Files.deleteIfExists(Paths.get(getDbPath(dbNameTwo)));
+        // Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+        // Files.deleteIfExists(Paths.get(getDbPath(dbNameTwo)));
 
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
         if (!Files.exists(Paths.get(getDbPath(dbNameOne))))
@@ -120,13 +124,13 @@ public class DbmsEntryTest {
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel2" });
 
         DbmsEntry.handleDbCloseCommand();
-        System.out.println("****************");
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameTwo });
         if (!Files.exists(Paths.get(getDbPath(dbNameTwo))))
             throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - DB file missing!");
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel2" });
-        DbmsEntry.handleDbCloseCommand();
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
+        DbmsEntry.handleDbCloseCommand();        
     }
 
     private static String getDbPath(String dbName) {
