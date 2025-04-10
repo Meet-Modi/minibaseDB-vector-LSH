@@ -22,7 +22,7 @@ import java.util.stream.IntStream;
  */
 public class LSHFIndex
 {
-
+    private String relationName;
     private int numLayers;
     private int noOfHashFunctionsPerLayer;
     private int attributeColumnNumber;
@@ -117,7 +117,7 @@ public class LSHFIndex
      * @param binLength             bin length
      * @param hashFunctionsPerLayer No of hash functions per layer. Input parameter.
      */
-    public LSHFIndex(int Layers, int binLength, int hashFunctionsPerLayer, int attributeColumnNumber)
+    public LSHFIndex(String relName, int Layers, int binLength, int hashFunctionsPerLayer, int attributeColumnNumber)
             throws
             HFDiskMgrException,
             HFException,
@@ -131,6 +131,7 @@ public class LSHFIndex
 
     {
         // Meta Data
+        this.relationName = relName;
         this.attributeColumnNumber = attributeColumnNumber;
         this.numLayers = Layers;
         this.binLength = binLength;
@@ -145,7 +146,7 @@ public class LSHFIndex
         }
 
         // Store Layer States to disk
-        Heapfile LayerState = new Heapfile(LAYER_STATE_HEAPFILE_NAME+attributeColumnNumber);
+        Heapfile LayerState = new Heapfile(getLSHFIndexLayerStateFileName(this.relationName, attributeColumnNumber));
 
         // States to store for each Layer.
         // int: LayerNumber, int: HashNumber, 100DVector: HashRandom_Vector, int: HashShift
@@ -175,7 +176,7 @@ public class LSHFIndex
 
         // Now we store layer meta data to another heap file layerMetaData
         // No. Layers, No. Hashes per layer, Bin width.
-        Heapfile LayerMetaData = new Heapfile(LAYER_METADATA_HEAPFILE_NAME+attributeColumnNumber);
+        Heapfile LayerMetaData = new Heapfile(getLSHFIndexLayerMetaDataFileName(this.relationName, attributeColumnNumber));
         Tuple temp2 = new Tuple();
 
         temp2.setHdr((short) META_TUPLE_ATTR_TYPES.length, META_TUPLE_ATTR_TYPES, new short[0]);
@@ -197,7 +198,7 @@ public class LSHFIndex
      * <p>
      * This constructor is to restore an existing LSHF index with its randomized vectors and shifts.
      */
-    public LSHFIndex(int attributeColumnNumber)
+    public LSHFIndex(String relName, int attributeColumnNumber)
             throws
             InvalidTupleSizeException,
             IOException,
@@ -215,9 +216,10 @@ public class LSHFIndex
             JoinsException,
             InvalidTypeException
     {
+        this.relationName = relName;
         this.attributeColumnNumber = attributeColumnNumber;
 
-        FileScan metaScan = new FileScan(LAYER_METADATA_HEAPFILE_NAME+attributeColumnNumber,
+        FileScan metaScan = new FileScan(getLSHFIndexLayerMetaDataFileName(this.relationName, attributeColumnNumber),
                 META_TUPLE_ATTR_TYPES,
                 new short[0],
                 (short) META_TUPLE_ATTR_TYPES.length,
@@ -225,7 +227,7 @@ public class LSHFIndex
                 META_TUPLE_PROJ_LIST,
                 null);
 
-        FileScan stateScan = new FileScan(LAYER_STATE_HEAPFILE_NAME+attributeColumnNumber,
+        FileScan stateScan = new FileScan(getLSHFIndexLayerStateFileName(this.relationName, attributeColumnNumber),
                 STATE_TUPLE_ATTR_TYPES,
                 new short[0],
                 (short) STATE_TUPLE_ATTR_TYPES.length,
@@ -428,6 +430,14 @@ public class LSHFIndex
         Heapfile hf = new Heapfile(fileName);
         hf.deleteFile();
         return new Heapfile(fileName);
+    }
+
+    private static String getLSHFIndexLayerStateFileName(String relName, int attributeColumnNumber) {
+        return LAYER_STATE_HEAPFILE_NAME + relName + attributeColumnNumber;
+    }
+
+    private static String getLSHFIndexLayerMetaDataFileName(String relName, int attributeColumnNumber) {
+        return LAYER_METADATA_HEAPFILE_NAME + relName + attributeColumnNumber;
     }
 
 }

@@ -59,7 +59,7 @@ public class NNIndexScan extends Iterator {
 
         if(index != null) {
             ScriptMetrics.setTimeReinitializeLshIndexStart();
-            lshfIndex = new LSHFIndex(fldNum);
+            lshfIndex = new LSHFIndex("",fldNum);
             ScriptMetrics.setTimeReinitializeLshIndexEnd();
         }
     }

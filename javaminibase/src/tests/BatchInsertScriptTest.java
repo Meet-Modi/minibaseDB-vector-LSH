@@ -170,7 +170,7 @@ public class BatchInsertScriptTest {
         int binLength = 1_000_000_000;
         HashMap<Integer, LSHFIndex> fieldNumberTolshfIndex = new HashMap<>();
         for(int vectorFieldNumber : vectorFieldNumbers)
-            fieldNumberTolshfIndex.put(vectorFieldNumber, new LSHFIndex(nLayers, binLength, nHashes, vectorFieldNumber));
+            fieldNumberTolshfIndex.put(vectorFieldNumber, new LSHFIndex("",nLayers, binLength, nHashes, vectorFieldNumber));
 
         for(int vectorFieldNumber : vectorFieldNumbers) {
             FileScan hfScan = perpareAndGetHeapFileScan();
@@ -206,16 +206,16 @@ public class BatchInsertScriptTest {
         Files.deleteIfExists(Paths.get(dbpath));
         new SystemDefs(dbpath, NUMBUF,NUMBUF, "Clock");
 
-        LSHFIndex originalIndex1 = new LSHFIndex(3, 10, 5, 1);
-        LSHFIndex indexFromDisk1 = new LSHFIndex(1);
+        LSHFIndex originalIndex1 = new LSHFIndex("",3, 10, 5, 1);
+        LSHFIndex indexFromDisk1 = new LSHFIndex("",1);
         if(! originalIndex1.equals(indexFromDisk1)) {
             System.out.println("FAIL - Index PreservationTest - Single index not equal!!!");
             throw new RuntimeException("FAIL - Index PreservationTest");
         }
 
-        LSHFIndex originalIndex2 = new LSHFIndex(3, 7, 2, 2);
-        LSHFIndex indexFromDisk2 = new LSHFIndex(2);
-        indexFromDisk1 = new LSHFIndex(1);
+        LSHFIndex originalIndex2 = new LSHFIndex("",3, 7, 2, 2);
+        LSHFIndex indexFromDisk2 = new LSHFIndex("",2);
+        indexFromDisk1 = new LSHFIndex("",1);
         if(! originalIndex2.equals(indexFromDisk2) || ! originalIndex1.equals(indexFromDisk1)) {
             System.out.println("FAIL - Index PreservationTest - Multi index not equal!!!");
             throw new RuntimeException("FAIL - Index PreservationTest");
@@ -230,7 +230,7 @@ public class BatchInsertScriptTest {
 
         HashMap<Integer, LSHFIndex> vectorFieldNumberToLshIndex = new HashMap<>();
         for(int vectorFieldNumber : vectorFieldNumbers)
-            vectorFieldNumberToLshIndex.put(vectorFieldNumber, new LSHFIndex(vectorFieldNumber));
+            vectorFieldNumberToLshIndex.put(vectorFieldNumber, new LSHFIndex("",vectorFieldNumber));
 
 
         FileScan hfScan = perpareAndGetHeapFileScan();
@@ -293,7 +293,7 @@ public class BatchInsertScriptTest {
         targetTuple.set100DVectFld(1, target);
 
         for(int vectorFieldNumber : vectorFieldNumbers) {
-            LSHFIndex index = new LSHFIndex(vectorFieldNumber);
+            LSHFIndex index = new LSHFIndex("",vectorFieldNumber);
 
             Heapfile unionFile = index.union(target, new Heapfile(BatchInsert.DB_DATA_HEAP_FILE_NAME));
             System.out.println("Union File Record Count - " + unionFile.getRecCnt());

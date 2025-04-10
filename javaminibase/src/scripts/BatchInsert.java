@@ -149,7 +149,7 @@ public class BatchInsert implements GlobalConst
         // init it's LSHF index with num_hashes and num_layers
         final LSHFIndex[] lshfIndices = new LSHFIndex[vectorFieldNumbers.size()];
         for(int i=0; i < vectorFieldNumbers.size(); i++)
-            lshfIndices[i] = new LSHFIndex(num_layers, bin_length, num_hashes,vectorFieldNumbers.get(i));
+            lshfIndices[i] = new LSHFIndex("",num_layers, bin_length, num_hashes,vectorFieldNumbers.get(i));
 
         while (true)
         {
