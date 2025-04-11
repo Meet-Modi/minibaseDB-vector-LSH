@@ -113,8 +113,8 @@ public class DbmsEntryTest {
         String dbNameOne = "testDb";
         String dbNameTwo = "testDbTwo";
 
-        // Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
-        // Files.deleteIfExists(Paths.get(getDbPath(dbNameTwo)));
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameTwo)));
 
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
         if (!Files.exists(Paths.get(getDbPath(dbNameOne))))
@@ -130,7 +130,7 @@ public class DbmsEntryTest {
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel2" });
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
-        DbmsEntry.handleDbCloseCommand();        
+        DbmsEntry.handleDbCloseCommand();
     }
 
     private static String getDbPath(String dbName) {

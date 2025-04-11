@@ -85,6 +85,7 @@ public class DbmsEntry {
         String dbName = commandParts[1];
         String dbPath = "/tmp/" + System.getProperty("user.name") + "." + dbName + "-db";
 
+        SystemDefs.MINIBASE_RESTART_FLAG = false;
         if (Files.exists(Paths.get(dbPath))) {
             System.out.println(dbName + " already exists. Restarting...");
             SystemDefs.MINIBASE_RESTART_FLAG = true;
