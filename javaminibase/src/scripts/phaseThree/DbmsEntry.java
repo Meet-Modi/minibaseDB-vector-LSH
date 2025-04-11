@@ -34,6 +34,10 @@ import java.util.Arrays;
 import java.util.Scanner;
 
 import LSHFIndex.LSHFIndex;
+import btree.BTreeFile;
+import btree.KeyClass;
+import btree.StringKey;
+import btree.IntegerKey;
 
 import static global.GlobalConst.NUMBUF;
 import static global.SystemDefs.JavabaseBM;
@@ -210,13 +214,13 @@ public class DbmsEntry {
         AttrType[] attrTypes;
         int columnIdInt = Integer.parseInt(columnId.trim());
 
-        try{
+        try {
             if (!relExists(relName)) {
                 System.out.println("Relation " + relName + " does not exist. Please create it first.");
                 return;
             }
 
-            if (indexExists(relName, columnIdInt)){
+            if (indexExists(relName, columnIdInt)) {
                 System.out.println("Index on column " + columnIdInt + " of relation " + relName + " already exists.");
                 return;
             }
@@ -232,8 +236,7 @@ public class DbmsEntry {
             return;
         }
 
-        boolean isIndexColumnVector = (attrTypes[columnIdInt - 1].attrType == AttrType.attrVector100D);
-        if(isIndexColumnVector){
+        if (attrTypes[columnIdInt - 1].attrType == AttrType.attrVector100D) {
             if (commandParts.length < 5) {
                 System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_CREATE.getUsage());
                 return;
@@ -242,9 +245,9 @@ public class DbmsEntry {
             int numLayers = Integer.parseInt(commandParts[3]);
             int numHashes = Integer.parseInt(commandParts[4]);
             int binLength = 1_000_000_000;
-            try{
-                new LSHFIndex(getRelNameSpace(currentOpenDb, relName), numLayers, binLength, numHashes, columnIdInt);
-                populateLSHFIndexOnExistingRelColumn(relName, columnIdInt);
+            try {
+                LSHFIndex lshfIndex = new LSHFIndex(getRelNameSpace(currentOpenDb, relName), numLayers, binLength, numHashes, columnIdInt);
+                populateLSHFIndexOnExistingRelColumn(lshfIndex, relName, columnIdInt);
                 insertIndexIntoDbMetaDataFile(relName, columnIdInt);
             } catch (Exception e) {
                 System.out.println("Error creating LSHF index: " + e.getMessage());
@@ -252,20 +255,33 @@ public class DbmsEntry {
                 return;
             }
             System.out.println("LSHF index created on column " + columnIdInt + " of relation " + relName);
+        } else if ((attrTypes[columnIdInt - 1].attrType == AttrType.attrString) || (attrTypes[columnIdInt - 1].attrType == AttrType.attrInteger)) {
+            int keyType = ((attrTypes[columnIdInt - 1].attrType == AttrType.attrString) ? AttrType.attrString : AttrType.attrInteger);
+            int keySize = ((attrTypes[columnIdInt - 1].attrType == AttrType.attrString) ? MAX_STRING_LENGTH : 4);
+
+            try {
+                BTreeFile bTreeFile = new BTreeFile(getRelNameSpace(currentOpenDb, relName), keyType, keySize, 1); // TODO : Full Delete for now
+                populateBTreeIndexOnExistingRelColumn(bTreeFile, relName, columnIdInt);
+                insertIndexIntoDbMetaDataFile(relName, columnIdInt);
+            } catch (Exception e) {
+                System.out.println("Error creating BTree index: " + e.getMessage());
+                e.printStackTrace();
+                return;
+            }
         } else {
-            // TODO: Handle other types of indexes using Btree
+            // TODO : Handle scenario where the column is of type real or symbol or null.
+            System.out.println("Index creation not supported for this type of column. Please use LSHF index for vector columns.");
+            return;
         }
         Pcounter.printPcounter();
     }
 
     // Helper methods
-    private static void populateLSHFIndexOnExistingRelColumn(String relName, int columnId)
+    private static void populateBTreeIndexOnExistingRelColumn(BTreeFile bTreeFile, String relName, int columnId)
             throws HFException, HFBufMgrException, HFDiskMgrException, IOException, InvalidTypeException,
             InvalidTupleSizeException, FieldNumberOutOfBoundException, InvalidSlotNumberException,
             SpaceNotAvailableException, FileScanException, TupleUtilsException, InvalidRelation, Exception {
-        // Open Existing LSHFIndex file
-        LSHFIndex lshfIndex = new LSHFIndex(getRelNameSpace(currentOpenDb, relName), columnId);
-
+        
         Heapfile heapfile = new Heapfile(getDbRelDataFilePath(currentOpenDb, relName));
         Scan scan = heapfile.openScan();
         RID rid = new RID();
@@ -274,8 +290,8 @@ public class DbmsEntry {
         AttrType[] attrTypes = getRelationAttrTypes(relName);
         short stringAttributeCount = 0;
 
-        for(int i = 0; i < attrTypes.length; i++){
-            if(attrTypes[i].attrType == AttrType.attrString){
+        for (int i = 0; i < attrTypes.length; i++) {
+            if (attrTypes[i].attrType == AttrType.attrString) {
                 stringAttributeCount++;
             }
         }
@@ -283,8 +299,45 @@ public class DbmsEntry {
         short[] stringLengths = new short[stringAttributeCount];
         Arrays.fill(stringLengths, MAX_STRING_LENGTH);
 
-        while ((tuple = scan.getNext(rid)) != null) {        
-            tuple.setHdr((short)attrTypes.length, attrTypes, stringLengths);
+        while ((tuple = scan.getNext(rid)) != null) {
+            tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
+            KeyClass key = null;
+            if (attrTypes[columnId].attrType == AttrType.attrString) {
+                key = new StringKey(tuple.getStrFld(columnId));
+            } else if (attrTypes[columnId].attrType == AttrType.attrInteger) {
+                key = new IntegerKey(tuple.getIntFld(columnId));
+            } else {
+                throw new IOException("Unknown attribute type" + attrTypes[columnId].attrType);
+            }
+            bTreeFile.insert(key, rid);
+        }
+        scan.closescan();
+    }
+
+    private static void populateLSHFIndexOnExistingRelColumn(LSHFIndex lshfIndex, String relName, int columnId)
+            throws HFException, HFBufMgrException, HFDiskMgrException, IOException, InvalidTypeException,
+            InvalidTupleSizeException, FieldNumberOutOfBoundException, InvalidSlotNumberException,
+            SpaceNotAvailableException, FileScanException, TupleUtilsException, InvalidRelation, Exception {
+        
+        Heapfile heapfile = new Heapfile(getDbRelDataFilePath(currentOpenDb, relName));
+        Scan scan = heapfile.openScan();
+        RID rid = new RID();
+        Tuple tuple = new Tuple();
+
+        AttrType[] attrTypes = getRelationAttrTypes(relName);
+        short stringAttributeCount = 0;
+
+        for (int i = 0; i < attrTypes.length; i++) {
+            if (attrTypes[i].attrType == AttrType.attrString) {
+                stringAttributeCount++;
+            }
+        }
+
+        short[] stringLengths = new short[stringAttributeCount];
+        Arrays.fill(stringLengths, MAX_STRING_LENGTH);
+
+        while ((tuple = scan.getNext(rid)) != null) {
+            tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
             lshfIndex.insertRecord(tuple.get100DVectFld(columnId), rid);
         }
         scan.closescan();
@@ -480,7 +533,8 @@ public class DbmsEntry {
         }
         JavabaseBM.flushAllPages();
         System.out.println(
-                "File " + getDbRelDataFilePath(currentOpenDb, relName) + " created with " + file.getRecCnt() + " records.");
+                "File " + getDbRelDataFilePath(currentOpenDb, relName) + " created with " + file.getRecCnt()
+                        + " records.");
     }
 
     private static void createDataFile(String relName)
