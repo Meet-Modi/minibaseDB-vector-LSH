@@ -18,6 +18,8 @@ import java.util.function.Consumer;
 
 public class DbmsEntryTest {
 
+    public static final short MAX_STRING_LENGTH = 64;
+
     public static void main(String[] args) throws Exception {
         testCreateNewDbCloseAndReopen();
         System.out.println("****************");
@@ -107,30 +109,55 @@ public class DbmsEntryTest {
     }
 
     private static void testBatchCreate() throws Exception {
-        System.out.println("This is a test for batch create, this first opens two databases, runs two batch inserts. Then again runs the same batch insert but this fails and exists");
-
-
-        String dbNameOne = "testDb";
-        String dbNameTwo = "testDbTwo";
-
+        String dbNameOne = "testDbOne";
+        
         Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
-        Files.deleteIfExists(Paths.get(getDbPath(dbNameTwo)));
-
+    
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
         if (!Files.exists(Paths.get(getDbPath(dbNameOne))))
             throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - DB file missing!");
 
-        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
-        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel2" });
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel1" });
 
+        String dbMetaDataFilePath = System.getProperty("user.name") + "." + dbNameOne + "-db.metadata";
+        String relMetadataFilePath = System.getProperty("user.name") + "." + dbNameOne + "." + "rel1" + ".metadata";
+        String dataFilePathFull = System.getProperty("user.name") + "." + dbNameOne + "." + "rel1" + ".data";
+
+        Heapfile dbMetaDataFile = new Heapfile(dbMetaDataFilePath);
+        Heapfile metadataFile = new Heapfile(relMetadataFilePath);
+        Heapfile dataFile = new Heapfile(dataFilePathFull);
+
+        if (dbMetaDataFile.getRecCnt() != 1)
+            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - DB metadata file record count mismatch after batch create!");
+        if (metadataFile.getRecCnt() != 4)
+            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - Metadata file record count mismatch after batch create!");
+        if (dataFile.getRecCnt() != 75000)
+            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - Data file record count mismatch after batch create!");
+        
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel2" });
+        
+        relMetadataFilePath = System.getProperty("user.name") + "." + dbNameOne + "." + "rel2" + ".metadata";
+        dataFilePathFull = System.getProperty("user.name") + "." + dbNameOne + "." + "rel2" + ".data";
+        
+        metadataFile = new Heapfile(relMetadataFilePath);
+        dataFile = new Heapfile(dataFilePathFull);
+
+        if (dbMetaDataFile.getRecCnt() != 2)
+            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - DB metadata file record count mismatch after batch create!");
+        if (metadataFile.getRecCnt() != 4)
+            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - Metadata file record count mismatch after batch create!");
+        if (dataFile.getRecCnt() != 25000)
+            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - Data file record count mismatch after batch create!");
+
+
+        try{
+            DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel1" });
+        } catch (Exception e) {
+            System.out.println("Expected exception: " + e.getMessage());
+        }
+        
         DbmsEntry.handleDbCloseCommand();
-        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameTwo });
-        if (!Files.exists(Paths.get(getDbPath(dbNameTwo))))
-            throw new RuntimeException("FAIL - testCreateNewDbCloseAndReopen - DB file missing!");
-        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
-        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", "rel2" });
-        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", "rel1" });
-        DbmsEntry.handleDbCloseCommand();
+
     }
 
     private static String getDbPath(String dbName) {
