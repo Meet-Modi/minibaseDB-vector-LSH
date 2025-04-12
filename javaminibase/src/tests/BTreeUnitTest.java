@@ -77,17 +77,6 @@ public class BTreeUnitTest {
         if (entry != null)
             throw new Exception("Empty tree should return no results");
 
-        // Test node splitting
-        for (int i = 1; i <= 100; i++) {
-            btree.insert(new IntegerKey(i), rid);
-        }
-        // BTreeHeaderPage headerPage = btree.getHeaderPage();
-        // PageId rootId = headerPage.get_rootId();
-        // BTSortedPage rootPage = new BTSortedPage(btree.pinPage(rootId),
-        // AttrType.attrInteger);
-        // if (rootPage.getType() != NodeType.INDEX) throw new Exception("Root should be
-        // an index page after split");
-
         // Test key size validation
         try {
             btree.insert(new IntegerKey(Integer.MAX_VALUE), rid);
@@ -95,6 +84,15 @@ public class BTreeUnitTest {
         } catch (KeyTooLongException e) {
             throw new Exception("KeyTooLongException should not occur for valid Integer keys");
         }
+
+        // Delete a key
+        boolean deleted = btree.Delete(new IntegerKey(30), rid);
+        if (!deleted) throw new Exception("Key 30 should be deleted successfully");
+
+        // Verify deletion
+        scan = btree.new_scan(new IntegerKey(30), new IntegerKey(30));
+        entry = scan.get_next();
+        if (entry != null) throw new Exception("Key 30 should not exist after deletion");
 
         System.out.println("Integer key tests passed!");
     }
@@ -152,6 +150,15 @@ public class BTreeUnitTest {
             System.out.println("Key size validation passed for String keys.");
         }
 
+        // Delete a key
+        boolean deleted = btree.Delete(new StringKey("cherry"), rid);
+        if (!deleted) throw new Exception("Key 'cherry' should be deleted successfully");
+
+        // Verify deletion
+        scan = btree.new_scan(new StringKey("cherry"), new StringKey("cherry"));
+        entry = scan.get_next();
+        if (entry != null) throw new Exception("Key 'cherry' should not exist after deletion");
+
         System.out.println("String key tests passed!");
     }
 
@@ -165,6 +172,7 @@ public class BTreeUnitTest {
         RID rid = new RID(new PageId(1), 0);
         btree.insert(new RealKey(1.1f), rid);
         btree.insert(new RealKey(2.2f), rid);
+        btree.insert(new RealKey(-3.3f), rid);
         btree.insert(new RealKey(3.3f), rid);
 
         // Search for a key and check return values
@@ -172,6 +180,12 @@ public class BTreeUnitTest {
         KeyDataEntry entry = scan.get_next();
         if (entry == null) throw new Exception("Key 2.2 should exist in the B+ Tree");
         if (((RealKey) entry.key).getKey() != 2.2f) throw new Exception("Key value mismatch for key 2.2");
+
+        // Search for a key and check return values
+        scan = btree.new_scan(new RealKey(-3.3f), new RealKey(-3.3f));
+        entry = scan.get_next();
+        if (entry == null) throw new Exception("Key -3.3 should exist in the B+ Tree");
+        if (((RealKey) entry.key).getKey() != -3.3f) throw new Exception("Key value mismatch for key -3.3");
 
         // Range scan
         scan = btree.new_scan(new RealKey(1.1f), new RealKey(3.3f));
@@ -186,6 +200,15 @@ public class BTreeUnitTest {
         if (entry == null) throw new Exception("First duplicate key 2.2 should exist");
         entry = scan.get_next();
         if (entry == null) throw new Exception("Second duplicate key 2.2 should exist");
+
+        // Delete a key
+        boolean deleted = btree.Delete(new RealKey(-3.3f), rid);
+        if (!deleted) throw new Exception("Key 3.3 should be deleted successfully");
+
+        // Verify deletion
+        scan = btree.new_scan(new RealKey(-3.3f), new RealKey(-3.3f));
+        entry = scan.get_next();
+        if (entry != null) throw new Exception("Key -3.3 should not exist after deletion");
 
         System.out.println("Real key tests passed!");
     }

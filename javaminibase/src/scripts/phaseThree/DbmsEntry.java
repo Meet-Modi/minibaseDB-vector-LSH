@@ -256,8 +256,24 @@ public class DbmsEntry {
             }
             System.out.println("LSHF index created on column " + columnIdInt + " of relation " + relName);
         } else if ((attrTypes[columnIdInt - 1].attrType == AttrType.attrString) || (attrTypes[columnIdInt - 1].attrType == AttrType.attrInteger)) {
-            int keyType = ((attrTypes[columnIdInt - 1].attrType == AttrType.attrString) ? AttrType.attrString : AttrType.attrInteger);
-            int keySize = ((attrTypes[columnIdInt - 1].attrType == AttrType.attrString) ? MAX_STRING_LENGTH : 4);
+            int keyType, keySize;
+            switch (attrTypes[columnIdInt - 1].attrType) {
+                case AttrType.attrString:
+                    keyType = AttrType.attrString;
+                    keySize = MAX_STRING_LENGTH;
+                    break;
+                case AttrType.attrInteger:
+                    keyType = AttrType.attrInteger;
+                    keySize = 4;
+                    break;
+                case AttrType.attrReal:
+                    keyType = AttrType.attrReal;
+                    keySize = 4;
+                    break;
+                default:
+                    System.out.println("Index creation not supported for this type of column. Please use LSHF index for vector columns.");
+                    return;
+            }
 
             try {
                 BTreeFile bTreeFile = new BTreeFile(getRelNameSpace(currentOpenDb, relName), keyType, keySize, 1); // TODO : Full Delete for now
