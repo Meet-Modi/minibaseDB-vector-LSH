@@ -36,7 +36,9 @@ import java.util.Scanner;
 import LSHFIndex.LSHFIndex;
 import btree.BTreeFile;
 import btree.KeyClass;
+import btree.RealKey;
 import btree.StringKey;
+import bufmgr.PagePinnedException;
 import btree.IntegerKey;
 
 import static global.GlobalConst.NUMBUF;
@@ -106,7 +108,13 @@ public class DbmsEntry {
             System.out.println("No DB open currently. Nothing closed.");
             return;
         }
-        JavabaseBM.flushAllPages();
+        try{
+            SystemDefs.JavabaseBM.flushAllPages();
+        } catch (PagePinnedException e){
+            e.printStackTrace();
+            System.out.println("Error flushing pages. Please try again.");
+        }
+
         System.out.println(currentOpenDb + " pages flushed and DB closed.");
         currentOpenDb = null;
     }
@@ -265,10 +273,11 @@ public class DbmsEntry {
                 return;
             }
         } else {
-            // TODO : Handle scenario where the column is of type real or symbol or null.
+            // TODO : Handle scenario where the column is of type symbol or null.
             System.out.println("Index creation not supported for this type of column. Please use LSHF index for vector columns.");
             return;
         }
+        System.out.println("BTree index created on column " + columnIdInt + " of relation " + relName);
         Pcounter.printPcounter();
     }
 
@@ -298,16 +307,19 @@ public class DbmsEntry {
         while ((tuple = scan.getNext(rid)) != null) {
             tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
             KeyClass key = null;
-            if (attrTypes[columnId].attrType == AttrType.attrString) {
+            if (attrTypes[columnId - 1].attrType == AttrType.attrString) {
                 key = new StringKey(tuple.getStrFld(columnId));
-            } else if (attrTypes[columnId].attrType == AttrType.attrInteger) {
+            } else if (attrTypes[columnId - 1].attrType == AttrType.attrInteger) {
                 key = new IntegerKey(tuple.getIntFld(columnId));
+            } else if (attrTypes[columnId - 1].attrType == AttrType.attrReal) {
+                key = new RealKey(tuple.getFloFld(columnId));
             } else {
                 throw new IOException("Unknown attribute type" + attrTypes[columnId].attrType);
             }
-            bTreeFile.insert(key, rid);
+            bTreeFile.insert(key, rid);            
         }
         scan.closescan();
+        bTreeFile.close();
     }
 
     private static void populateLSHFIndexOnExistingRelColumn(LSHFIndex lshfIndex, String relName, int columnId)

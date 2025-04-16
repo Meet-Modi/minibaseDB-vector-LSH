@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 import btree.*;
+import diskmgr.Pcounter;
 import global.*;
 
 public class BTreeUnitTest {
@@ -13,6 +14,7 @@ public class BTreeUnitTest {
     }
 
     public static void main(String[] args) {
+        Pcounter.initialize();
         try {
             // Initialize the database
             Files.deleteIfExists(Paths.get(getDbPath("BTreeTestDB")));
@@ -30,6 +32,7 @@ public class BTreeUnitTest {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        Pcounter.printPcounter();
     }
 
     private static void testIntegerKeys() throws Exception {
