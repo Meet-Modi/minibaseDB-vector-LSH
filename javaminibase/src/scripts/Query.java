@@ -10,6 +10,7 @@ import java.util.stream.IntStream;
 import bufmgr.PagePinnedException;
 import diskmgr.Pcounter;
 import global.*;
+import heap.Heapfile;
 import heap.Tuple;
 import index.NNIndexScan;
 import index.RSIndexScan;
@@ -22,6 +23,7 @@ import static global.SystemDefs.JavabaseBM;
 
 public class Query
 {
+    private static final String QUERY_RESULTS_HEAPFILE_NAME = "queryResults";
     public static int numAttributes;
     public static AttrType[] attrTypes;
     public static short[] strLengths;
@@ -29,11 +31,14 @@ public class Query
 
     private static int[] outputFieldNumbers;
     private static Iterator scan;
+    private static Heapfile queryResult;
     private static AttrType[] outputTupleAttrTypes;
 
     public static int numBuffersForSort;
 
-    public static void main(String[] args) throws Exception
+    public static void main(String[] args)
+            throws
+            Exception
     {
         ScriptMetrics.setTimeStarted();
 
@@ -44,11 +49,11 @@ public class Query
         }
         String db_name = args[0].trim();
         String query_specification_file_name = args[1].trim();
-        String index_option =  args[2].trim();
+        String index_option = args[2].trim();
         int num_buffers = Integer.parseInt(args[3].trim());
 
 //        Allocate 1/4th total buffers for sort
-        numBuffersForSort = num_buffers/4;
+        numBuffersForSort = num_buffers / 4;
         restartDb(db_name, num_buffers);
         Pcounter.initialize();
 
@@ -63,7 +68,7 @@ public class Query
         if (query_specification.startsWith("Range("))
         {
             String specifications = query_specification.substring("Range(".length(), query_specification.length() - 1);
-            String[] parameters =  specifications.split(",");
+            String[] parameters = specifications.split(",");
             if (parameters.length < 3)
             {
                 throw new IOException("query_specification requires at least 3 parameters.");
@@ -73,10 +78,10 @@ public class Query
             int vector_field_number = Integer.parseInt(parameters[0].trim());
             String target_vector_file_name = parameters[1].trim();
             int distance = Integer.parseInt(parameters[2].trim());
-            outputFieldNumbers = new int[parameters.length-3];
-            for(int i = 3; i < parameters.length; i++)
+            outputFieldNumbers = new int[parameters.length - 3];
+            for (int i = 3; i < parameters.length; i++)
             {
-                outputFieldNumbers[i-3] = Integer.parseInt(parameters[i].trim());
+                outputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
             }
 
             // Extract the target vector from the target vector file
@@ -90,6 +95,10 @@ public class Query
             FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
             IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
 
+            /*TODO: heapfile name is not unique. Need to use relation names
+                    for phase 3
+            */
+            Heapfile queryResult =  openDeleteAndOpenHeapFile(query_specification);
             scan = new RSIndexScan(
 //                    Choose to use LSHFIndex or not
                     index_option.equals("Y") ? new IndexType(IndexType.Lsh) : null,
@@ -100,7 +109,7 @@ public class Query
         else if (query_specification.startsWith("NN("))
         {
             String specifications = query_specification.substring("NN(".length(), query_specification.length() - 1);
-            String[] parameters =  specifications.split(",");
+            String[] parameters = specifications.split(",");
             if (parameters.length < 3)
             {
                 throw new IOException("query_specification requires at least 3 parameters.");
@@ -110,10 +119,10 @@ public class Query
             int vector_field_number = Integer.parseInt(parameters[0].trim());
             String target_vector_file_name = parameters[1].trim();
             int number_of_nearest_neighbors = Integer.parseInt(parameters[2].trim());
-            outputFieldNumbers = new int[parameters.length-3];
-            for(int i = 3; i < parameters.length; i++)
+            outputFieldNumbers = new int[parameters.length - 3];
+            for (int i = 3; i < parameters.length; i++)
             {
-                outputFieldNumbers[i-3] = Integer.parseInt(parameters[i].trim());
+                outputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
             }
 
             // Extract the target vector from the target vector file
@@ -127,6 +136,10 @@ public class Query
             FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
             IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
 
+            /*TODO: heapfile name is not unique. Need to use relation names
+                    for phase 3
+            */
+            Heapfile queryResult =  openDeleteAndOpenHeapFile(query_specification);
             scan = new NNIndexScan(
 //                    Choose to use LSHFIndex or not
                     index_option.equals("Y") ? new IndexType(IndexType.Lsh) : null,
@@ -140,23 +153,33 @@ public class Query
         }
 
         System.out.println("\n ---Output Tuples---");
-        try {
+        try
+        {
             ScriptMetrics.setTimeDataSortStart();
 //        Iterate over scan
             prepareOutputTupleAttrTypes();
 
             Tuple t = scan.get_next();
-            while (t != null) {
+            while (t != null)
+            {
                 printOutputTuple(t);
+                // Saving query results in the queryResult heapfile to handle joins
+                queryResult.insertRecord(t.getTupleByteArray());
                 t = scan.get_next();
                 ScriptMetrics.incrementNumberOfTuplesReturned();
             }
             scan.close();
             ScriptMetrics.setTimeDataSortEnd();
-        } finally {
-            try {
+        }
+        finally
+        {
+            try
+            {
                 JavabaseBM.flushAllPages();
-            } catch (PagePinnedException ignored) {}
+            }
+            catch (PagePinnedException ignored)
+            {
+            }
         }
         System.out.println("\n ---End Output---");
 
@@ -165,34 +188,42 @@ public class Query
         ScriptMetrics.printMetricsReport();
     }
 
-    private static void printOutputTuple(Tuple outTuple) throws Exception {
+    private static void printOutputTuple(Tuple outTuple)
+            throws
+            Exception
+    {
         System.out.println();
 
-        for(int i = 0; i < outputTupleAttrTypes.length; i++){
-            switch (outputTupleAttrTypes[i].attrType) {
+        for (int i = 0; i < outputTupleAttrTypes.length; i++)
+        {
+            switch (outputTupleAttrTypes[i].attrType)
+            {
                 case AttrType.attrInteger:
-                    System.out.println("" + outTuple.getIntFld(i+1));
+                    System.out.println("" + outTuple.getIntFld(i + 1));
                     break;
                 case AttrType.attrString:
-                    System.out.println(outTuple.getStrFld(i+1));
+                    System.out.println(outTuple.getStrFld(i + 1));
                     break;
                 case AttrType.attrReal:
-                    System.out.println("" + outTuple.getFloFld(i+1));
+                    System.out.println("" + outTuple.getFloFld(i + 1));
                     break;
                 case AttrType.attrVector100D:
-                    System.out.println(outTuple.get100DVectFld(i+1));
+                    System.out.println(outTuple.get100DVectFld(i + 1));
                     break;
             }
         }
     }
 
-    private static void prepareOutputTupleAttrTypes() {
+    private static void prepareOutputTupleAttrTypes()
+    {
         ArrayList<AttrType> attrTypesList = new ArrayList<>();
-        Arrays.stream(outputFieldNumbers).forEach(outNum -> attrTypesList.add(attrTypes[outNum-1]));
+        Arrays.stream(outputFieldNumbers).forEach(outNum -> attrTypesList.add(attrTypes[outNum - 1]));
         outputTupleAttrTypes = attrTypesList.toArray(new AttrType[0]);
     }
 
-    public static Vector100Dtype read_target_vector(String target_vector_file_name) throws Exception
+    public static Vector100Dtype read_target_vector(String target_vector_file_name)
+            throws
+            Exception
     {
         short[] vector = new short[100];
         Vector100Dtype target_vector;
@@ -217,7 +248,10 @@ public class Query
         return target_vector;
     }
 
-    public static void restartDb(String dbName, int numBuf) throws Exception {
+    public static void restartDb(String dbName, int numBuf)
+            throws
+            Exception
+    {
 //        Restart Minibase
         SystemDefs.MINIBASE_RESTART_FLAG = true;
         new SystemDefs(BatchInsert.getDbFileSystemPath(dbName), BatchInsert.DB_SIZE_IN_PAGES, numBuf, "Clock");
@@ -226,15 +260,16 @@ public class Query
         FileScan dbMetadataScan = new FileScan(BatchInsert.DB_DATA_METADATA_HEAP_FILE_NAME,
                 new AttrType[]{new AttrType(AttrType.attrInteger)},
                 null,
-                (short)1,
+                (short) 1,
                 1,
-                new FldSpec[] {new FldSpec(new RelSpec(RelSpec.outer), 1)},
+                new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)},
                 null
         );
 
         ArrayList<Integer> metadataAttrTypes = new ArrayList<>();
         Tuple t = dbMetadataScan.get_next();
-        while(t != null) {
+        while (t != null)
+        {
             metadataAttrTypes.add(t.getIntFld(1));
             t = dbMetadataScan.get_next();
         }
@@ -242,9 +277,10 @@ public class Query
 
         ArrayList<AttrType> attrTypesList = new ArrayList<>();
         int strAttributeCounts = 0;
-        for(Integer type : metadataAttrTypes) {
+        for (Integer type : metadataAttrTypes)
+        {
             attrTypesList.add(new AttrType(type));
-            if(type == AttrType.attrString)
+            if (type == AttrType.attrString)
                 strAttributeCounts++;
         }
 
@@ -252,5 +288,168 @@ public class Query
         attrTypes = attrTypesList.toArray(new AttrType[0]);
         strLengths = new short[strAttributeCounts];
         IntStream.range(0, strAttributeCounts).forEach(i -> strLengths[i] = BatchInsert.MAX_STRING_LENGTH);
+    }
+
+    private static Heapfile openDeleteAndOpenHeapFile(String fileName)
+            throws
+            Exception
+    {
+        Heapfile hf = new Heapfile(fileName);
+        hf.deleteFile();
+        return new Heapfile(fileName);
+    }
+
+    public static void queryHandler(String dbName, String querySpecificationFileName, String numBuf)
+            throws
+            Exception
+    {
+        ScriptMetrics.setTimeStarted();
+
+        String db_name = dbName;
+        String query_specification_file_name = querySpecificationFileName;
+
+        int num_buffers = Integer.parseInt(numBuf);
+
+//        Allocate 1/4th total buffers for sort
+        numBuffersForSort = num_buffers / 4;
+        restartDb(db_name, num_buffers);
+        Pcounter.initialize();
+
+        BufferedReader br = new BufferedReader(new FileReader(query_specification_file_name));
+        String query_specification = br.readLine();
+        if (query_specification == null)
+        {
+            System.err.println("query_specification is null.");
+        }
+        query_specification = query_specification.trim();
+
+        if (query_specification.startsWith("Range("))
+        {
+            String specifications = query_specification.substring("Range(".length(), query_specification.length() - 1);
+            String[] parameters = specifications.split(",");
+
+            // Extract the parameters from the query specification.
+            int vector_field_number = Integer.parseInt(parameters[0].trim());
+            String target_vector_file_name = parameters[1].trim();
+            int distance = Integer.parseInt(parameters[2].trim());
+            String indexOption = parameters[3].trim();
+
+            outputFieldNumbers = new int[parameters.length - 4];
+            for (int i = 4; i < parameters.length; i++)
+            {
+                outputFieldNumbers[i - 4] = Integer.parseInt(parameters[i].trim());
+            }
+
+            // Extract the target vector from the target vector file
+            Vector100Dtype target_vector = read_target_vector(target_vector_file_name);
+
+            // Print the query details
+            System.out.println("Range Query Parsed:");
+            System.out.println("QA: " + vector_field_number + ", D: " + distance + ", target vector: " + Arrays.toString(target_vector.vector));
+            System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
+
+            FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
+            IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
+
+            /*TODO Vikram:
+                    1. heapfile name is not unique. Need to use relation names
+                        for phase 3
+                    2. Need to ensure that the index scan below is accessing the correct index
+            */
+            Heapfile queryResult = openDeleteAndOpenHeapFile(query_specification);
+            scan = new RSIndexScan(
+//                    Choose to use LSHFIndex or not
+                    indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null,
+                    null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null,
+                    vector_field_number, target_vector, distance
+            );
+        }
+        else if (query_specification.startsWith("NN("))
+        {
+            String specifications = query_specification.substring("NN(".length(), query_specification.length() - 1);
+            String[] parameters = specifications.split(",");
+
+            // Extract the parameters from the query specification.
+            int vector_field_number = Integer.parseInt(parameters[0].trim());
+            String target_vector_file_name = parameters[1].trim();
+            int number_of_nearest_neighbors = Integer.parseInt(parameters[2].trim());
+            String  indexOption = parameters[3].trim();
+            outputFieldNumbers = new int[parameters.length - 4];
+            for (int i = 4; i < parameters.length; i++)
+            {
+                outputFieldNumbers[i - 4] = Integer.parseInt(parameters[i].trim());
+            }
+
+            // Extract the target vector from the target vector file
+            Vector100Dtype target_vector = read_target_vector(target_vector_file_name);
+
+            // Print the query details
+            System.out.println("NN Query Parsed:");
+            System.out.println("QA (vectorFieldNumber): " + vector_field_number + ", K: " + number_of_nearest_neighbors + ", target vector: " + Arrays.toString(target_vector.vector));
+            System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
+
+            FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
+            IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
+
+             /*TODO Vikram:
+                    1. heapfile name is not unique. Need to use relation names
+                        for phase 3
+                    2. Need to ensure that the index scan below is accessing the correct index
+            */
+            Heapfile queryResult = openDeleteAndOpenHeapFile(query_specification);
+            scan = new NNIndexScan(
+//                    Choose to use LSHFIndex or not
+                    indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null,
+                    null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null,
+                    vector_field_number, target_vector, number_of_nearest_neighbors
+            );
+        }
+        else if (query_specification.startsWith("Sort("))
+        {
+
+        }
+        else if (query_specification.startsWith("Filter("))
+        {
+
+        }
+        else
+        {
+            throw new RuntimeException("query_specification is not a valid query_specification.");
+        }
+
+        System.out.println("\n ---Output Tuples---");
+        try
+        {
+            ScriptMetrics.setTimeDataSortStart();
+//        Iterate over scan
+            prepareOutputTupleAttrTypes();
+
+            Tuple t = scan.get_next();
+            while (t != null)
+            {
+                printOutputTuple(t);
+                // Saving query results in the queryResult heapfile to handle joins
+                queryResult.insertRecord(t.getTupleByteArray());
+                t = scan.get_next();
+                ScriptMetrics.incrementNumberOfTuplesReturned();
+            }
+            scan.close();
+            ScriptMetrics.setTimeDataSortEnd();
+        }
+        finally
+        {
+            try
+            {
+                JavabaseBM.flushAllPages();
+            }
+            catch (PagePinnedException ignored)
+            {
+            }
+        }
+        System.out.println("\n ---End Output---");
+
+        Pcounter.printPcounter();
+        ScriptMetrics.setTimeEnded();
+        ScriptMetrics.printMetricsReport();
     }
 }
