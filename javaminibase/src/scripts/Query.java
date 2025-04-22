@@ -23,7 +23,7 @@ import static global.SystemDefs.JavabaseBM;
 
 public class Query
 {
-    private static final String QUERY_RESULTS_HEAPFILE_NAME = "queryResults";
+    private static String QUERY_RESULTS_HEAPFILE_NAME;
     public static int numAttributes;
     public static AttrType[] attrTypes;
     public static short[] strLengths;
@@ -36,9 +36,8 @@ public class Query
 
     public static int numBuffersForSort;
 
-    public static void main(String[] args)
-            throws
-            Exception
+    public static void main(String[] args) throws
+                                           Exception
     {
         ScriptMetrics.setTimeStarted();
 
@@ -98,13 +97,9 @@ public class Query
             /*TODO: heapfile name is not unique. Need to use relation names
                     for phase 3
             */
-            Heapfile queryResult =  openDeleteAndOpenHeapFile(query_specification);
             scan = new RSIndexScan(
 //                    Choose to use LSHFIndex or not
-                    index_option.equals("Y") ? new IndexType(IndexType.Lsh) : null,
-                    null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null,
-                    vector_field_number, target_vector, distance
-            );
+                    index_option.equals("Y") ? new IndexType(IndexType.Lsh) : null, null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, distance);
         }
         else if (query_specification.startsWith("NN("))
         {
@@ -139,13 +134,9 @@ public class Query
             /*TODO: heapfile name is not unique. Need to use relation names
                     for phase 3
             */
-            Heapfile queryResult =  openDeleteAndOpenHeapFile(query_specification);
             scan = new NNIndexScan(
 //                    Choose to use LSHFIndex or not
-                    index_option.equals("Y") ? new IndexType(IndexType.Lsh) : null,
-                    null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null,
-                    vector_field_number, target_vector, number_of_nearest_neighbors
-            );
+                    index_option.equals("Y") ? new IndexType(IndexType.Lsh) : null, null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, number_of_nearest_neighbors);
         }
         else
         {
@@ -163,8 +154,6 @@ public class Query
             while (t != null)
             {
                 printOutputTuple(t);
-                // Saving query results in the queryResult heapfile to handle joins
-                queryResult.insertRecord(t.getTupleByteArray());
                 t = scan.get_next();
                 ScriptMetrics.incrementNumberOfTuplesReturned();
             }
@@ -188,9 +177,8 @@ public class Query
         ScriptMetrics.printMetricsReport();
     }
 
-    private static void printOutputTuple(Tuple outTuple)
-            throws
-            Exception
+    private static void printOutputTuple(Tuple outTuple) throws
+                                                         Exception
     {
         System.out.println();
 
@@ -221,9 +209,8 @@ public class Query
         outputTupleAttrTypes = attrTypesList.toArray(new AttrType[0]);
     }
 
-    public static Vector100Dtype read_target_vector(String target_vector_file_name)
-            throws
-            Exception
+    public static Vector100Dtype read_target_vector(String target_vector_file_name) throws
+                                                                                    Exception
     {
         short[] vector = new short[100];
         Vector100Dtype target_vector;
@@ -248,23 +235,15 @@ public class Query
         return target_vector;
     }
 
-    public static void restartDb(String dbName, int numBuf)
-            throws
-            Exception
+    public static void restartDb(String dbName, int numBuf) throws
+                                                            Exception
     {
 //        Restart Minibase
         SystemDefs.MINIBASE_RESTART_FLAG = true;
         new SystemDefs(BatchInsert.getDbFileSystemPath(dbName), BatchInsert.DB_SIZE_IN_PAGES, numBuf, "Clock");
 
 //        Parse Db Meta data
-        FileScan dbMetadataScan = new FileScan(BatchInsert.DB_DATA_METADATA_HEAP_FILE_NAME,
-                new AttrType[]{new AttrType(AttrType.attrInteger)},
-                null,
-                (short) 1,
-                1,
-                new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)},
-                null
-        );
+        FileScan dbMetadataScan = new FileScan(BatchInsert.DB_DATA_METADATA_HEAP_FILE_NAME, new AttrType[]{new AttrType(AttrType.attrInteger)}, null, (short) 1, 1, new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
         ArrayList<Integer> metadataAttrTypes = new ArrayList<>();
         Tuple t = dbMetadataScan.get_next();
@@ -280,8 +259,7 @@ public class Query
         for (Integer type : metadataAttrTypes)
         {
             attrTypesList.add(new AttrType(type));
-            if (type == AttrType.attrString)
-                strAttributeCounts++;
+            if (type == AttrType.attrString) strAttributeCounts++;
         }
 
         numAttributes = metadataAttrTypes.size();
@@ -290,18 +268,16 @@ public class Query
         IntStream.range(0, strAttributeCounts).forEach(i -> strLengths[i] = BatchInsert.MAX_STRING_LENGTH);
     }
 
-    private static Heapfile openDeleteAndOpenHeapFile(String fileName)
-            throws
-            Exception
+    private static Heapfile openDeleteAndOpenHeapFile(String fileName) throws
+                                                                       Exception
     {
         Heapfile hf = new Heapfile(fileName);
         hf.deleteFile();
         return new Heapfile(fileName);
     }
 
-    public static void queryHandler(String dbName, String querySpecificationFileName, String numBuf)
-            throws
-            Exception
+    public static void queryHandler(String dbName, String querySpecificationFileName, String numBuf, String relName) throws
+                                                                                                     Exception
     {
         ScriptMetrics.setTimeStarted();
 
@@ -356,13 +332,12 @@ public class Query
                         for phase 3
                     2. Need to ensure that the index scan below is accessing the correct index
             */
-            Heapfile queryResult = openDeleteAndOpenHeapFile(query_specification);
+            // Setup name for QUERY_RESULTS_HEAPFILE
+            QUERY_RESULTS_HEAPFILE_NAME = "Range"+relName+parameters[0].trim()+target_vector_file_name;
+            queryResult = openDeleteAndOpenHeapFile(QUERY_RESULTS_HEAPFILE_NAME);
             scan = new RSIndexScan(
 //                    Choose to use LSHFIndex or not
-                    indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null,
-                    null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null,
-                    vector_field_number, target_vector, distance
-            );
+                    indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null, relName, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, distance);
         }
         else if (query_specification.startsWith("NN("))
         {
@@ -373,7 +348,7 @@ public class Query
             int vector_field_number = Integer.parseInt(parameters[0].trim());
             String target_vector_file_name = parameters[1].trim();
             int number_of_nearest_neighbors = Integer.parseInt(parameters[2].trim());
-            String  indexOption = parameters[3].trim();
+            String indexOption = parameters[3].trim();
             outputFieldNumbers = new int[parameters.length - 4];
             for (int i = 4; i < parameters.length; i++)
             {
@@ -396,17 +371,50 @@ public class Query
                         for phase 3
                     2. Need to ensure that the index scan below is accessing the correct index
             */
-            Heapfile queryResult = openDeleteAndOpenHeapFile(query_specification);
+            // Setup name for QUERY_RESULTS_HEAPFILE
+            QUERY_RESULTS_HEAPFILE_NAME = "NN"+relName+parameters[0].trim()+target_vector_file_name;
+            queryResult = openDeleteAndOpenHeapFile(QUERY_RESULTS_HEAPFILE_NAME);
             scan = new NNIndexScan(
 //                    Choose to use LSHFIndex or not
-                    indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null,
-                    null, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null,
-                    vector_field_number, target_vector, number_of_nearest_neighbors
-            );
+                    indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null, relName, null, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, number_of_nearest_neighbors);
         }
         else if (query_specification.startsWith("Sort("))
         {
+            String specifications = query_specification.substring("Sort(".length(), query_specification.length() - 1);
+            String[] parameters = specifications.split(",");
 
+            // Extract the parameters from the query specification.
+            int vector_field_number = Integer.parseInt(parameters[0].trim());
+            String target_vector_file_name = parameters[1].trim();
+            int distance = Integer.parseInt(parameters[2].trim());
+            String indexOption = "N";
+
+            outputFieldNumbers = new int[parameters.length - 3];
+            for (int i = 3; i < parameters.length; i++)
+            {
+                outputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
+            }
+
+            // Extract the target vector from the target vector file
+            Vector100Dtype target_vector = read_target_vector(target_vector_file_name);
+
+            // Print the query details
+            System.out.println("Range Query Parsed:");
+            System.out.println("QA: " + vector_field_number + ", D: " + distance + ", target vector: " + Arrays.toString(target_vector.vector));
+            System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
+
+            FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
+            IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
+
+            /*TODO Vikram:
+                    1. heapfile name is not unique. Need to use relation names
+                        for phase 3
+                    2. Need to ensure that the index scan below is accessing the correct index
+            */
+            // Setup name for QUERY_RESULTS_HEAPFILE
+            QUERY_RESULTS_HEAPFILE_NAME = "Sort"+relName+parameters[0].trim()+target_vector_file_name;
+            queryResult = openDeleteAndOpenHeapFile(QUERY_RESULTS_HEAPFILE_NAME);
+            scan = new RSIndexScan(null, relName, relName, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, distance);
         }
         else if (query_specification.startsWith("Filter("))
         {

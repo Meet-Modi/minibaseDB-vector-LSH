@@ -36,7 +36,7 @@ public class LSHFIndex
 
     public static final String UNION_DUMP_HEAP_FILE_NAME = "unionDump";
     public static final String RID_DUMP_HEAP_FILE_NAME = "ridDump";
-    public  static final String CLEAN_RID_DUMP_HEAP_FILE_NAME = "cleanRidDump";
+    public static final String CLEAN_RID_DUMP_HEAP_FILE_NAME = "cleanRidDump";
 
     private static final AttrType[] META_TUPLE_ATTR_TYPES = new AttrType[3];
 
@@ -287,7 +287,8 @@ public class LSHFIndex
         }
     }
 
-    public static String generateBinHeapFileName(int layer, int attributeColumnNumber,String hash) {
+    public static String generateBinHeapFileName(int layer, int attributeColumnNumber, String hash)
+    {
         return "col" + attributeColumnNumber + "lay" + layer + "bin" + hash;
     }
 
@@ -362,12 +363,14 @@ public class LSHFIndex
         TupleOrder sortOrder = new TupleOrder(TupleOrder.Ascending);
         Heapfile cleanRidDump = openDeleteAndOpenHeapFile(CLEAN_RID_DUMP_HEAP_FILE_NAME);
         Sort ridDumpSort = new Sort(RID_DUMP_TUPLE_ATTR_TYPES, (short) RID_DUMP_TUPLE_ATTR_TYPES.length, RID_DUMP_TUPLE_STR_LENGTHS, ridDumpScan, sortFieldNumber, sortOrder, RID_DUMP_TUPLE_STR_LENGTHS[0], Query.numBuffersForSort);
-        try {
+        try
+        {
             // iterate over sorted RID_DUMP_HEAP_FILE
             // Ignore duplicates and add unique records to cleanRIDDump
             Tuple sortedRidDumpTuple = ridDumpSort.get_next();
             String prevUniqueID = "";
-            while (sortedRidDumpTuple != null) {
+            while (sortedRidDumpTuple != null)
+            {
 
                 String currentUniqueID = sortedRidDumpTuple.getStrFld(3);
 
@@ -377,7 +380,9 @@ public class LSHFIndex
                 prevUniqueID = currentUniqueID;
                 sortedRidDumpTuple = ridDumpSort.get_next();
             }
-        } finally {
+        }
+        finally
+        {
             ridDumpSort.close();
             ridDumpScan.close();
             ridDump.deleteFile();
@@ -426,17 +431,21 @@ public class LSHFIndex
                 (Arrays.equals(this.layers, otherIndex.layers)));
     }
 
-    private Heapfile openDeleteAndOpenHeapFile(String fileName) throws Exception {
+    private Heapfile openDeleteAndOpenHeapFile(String fileName) throws
+                                                                Exception
+    {
         Heapfile hf = new Heapfile(fileName);
         hf.deleteFile();
         return new Heapfile(fileName);
     }
 
-    private static String getLSHFIndexLayerStateFileName(String relName, int attributeColumnNumber) {
+    private static String getLSHFIndexLayerStateFileName(String relName, int attributeColumnNumber)
+    {
         return LAYER_STATE_HEAPFILE_NAME + relName + attributeColumnNumber;
     }
 
-    private static String getLSHFIndexLayerMetaDataFileName(String relName, int attributeColumnNumber) {
+    private static String getLSHFIndexLayerMetaDataFileName(String relName, int attributeColumnNumber)
+    {
         return LAYER_METADATA_HEAPFILE_NAME + relName + attributeColumnNumber;
     }
 
