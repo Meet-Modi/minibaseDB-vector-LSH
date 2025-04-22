@@ -59,9 +59,8 @@ public class DbmsEntry
             throws
             Exception
     {
-
-        while (true)
-        {
+        while (true) {
+            Pcounter.initialize();
             System.out.println("\nEnter your command");
 
             String input = scanner.nextLine();
@@ -94,6 +93,7 @@ public class DbmsEntry
                 System.out.println("Unrecognized command. Quitting...");
                 break;
             }
+            Pcounter.printPcounter();
         }
         handleDbCloseCommand();
         scanner.close();
@@ -154,19 +154,13 @@ public class DbmsEntry
         currentOpenDb = null;
     }
 
-    public static void handleBatchCreateCommand(String[] commandParts)
-            throws
-            Exception
-    {
-        Pcounter.initialize();
-        if (currentOpenDb == null)
-        {
+    public static void handleBatchCreateCommand(String[] commandParts) throws Exception {
+        if (currentOpenDb == null) {
             System.out.println("No DB open currently. Please open a new db first.");
             return;
         }
 
-        if (commandParts.length != 3 && !commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand()))
-        {
+        if (commandParts.length != 3 || !commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand())) {
             System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_CREATE.getUsage());
             return;
         }
@@ -222,12 +216,9 @@ public class DbmsEntry
         createDataFile(relName);
         batchInsertDataIntoRel(br, relName, numAttributes, attributeTypes);
         br.close();
-        Pcounter.printPcounter();
     }
 
-    public static void handleIndexCreateCommand(String[] commandParts)
-    {
-        Pcounter.initialize();
+    public static void handleIndexCreateCommand(String[] commandParts) {
         String relName = commandParts[1];
         String columnId = commandParts[2];
 
@@ -237,15 +228,13 @@ public class DbmsEntry
             return;
         }
 
-        if (commandParts.length < 3 && !commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand()))
-        {
-            System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_CREATE.getUsage());
+        if (commandParts.length < 3 || !commandParts[0].equals(SupportedCommands.CREATE_INDEX.getCommand())) {
+            System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.CREATE_INDEX.getUsage());
             return;
         }
 
-        if (relName == null || columnId == null)
-        {
-            System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_CREATE.getUsage());
+        if (relName == null || columnId == null) {
+            System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.CREATE_INDEX.getUsage());
             return;
         }
 
@@ -280,11 +269,10 @@ public class DbmsEntry
             return;
         }
 
-        if (attrTypes[columnIdInt - 1].attrType == AttrType.attrVector100D)
-        {
-            if (commandParts.length < 5)
-            {
-                System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_CREATE.getUsage());
+
+        if (attrTypes[columnIdInt - 1].attrType == AttrType.attrVector100D) {
+            if (commandParts.length < 5) {
+                System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.CREATE_INDEX.getUsage());
                 return;
             }
 
@@ -304,9 +292,8 @@ public class DbmsEntry
                 return;
             }
             System.out.println("LSHF index created on column " + columnIdInt + " of relation " + relName);
-        }
-        else if ((attrTypes[columnIdInt - 1].attrType == AttrType.attrString) || (attrTypes[columnIdInt - 1].attrType == AttrType.attrInteger))
-        {
+        } else if ((attrTypes[columnIdInt - 1].attrType == AttrType.attrString) || (attrTypes[columnIdInt - 1].attrType == AttrType.attrInteger)
+                || (attrTypes[columnIdInt - 1].attrType == AttrType.attrReal)) {
             int keyType, keySize;
             switch (attrTypes[columnIdInt - 1].attrType)
             {
@@ -347,12 +334,10 @@ public class DbmsEntry
             return;
         }
         System.out.println("BTree index created on column " + columnIdInt + " of relation " + relName);
-        Pcounter.printPcounter();
     }
 
     public static void handleQueryCommand(String[] commandParts) throws Exception
     {
-        Pcounter.initialize();
         String rel1Name = commandParts[1];
         String rel2Name = commandParts[2];
         String querySpecificaionFile = commandParts[3];
@@ -410,7 +395,6 @@ public class DbmsEntry
             String distanceJoinRangeQuerySpecificationFile = rel1Name+rel2Name+"DJOIN";
             // Step 2: using results from step 1, join on relation 2.
         }
-        Pcounter.printPcounter();
     }
     // Helper methods
     private static void populateBTreeIndexOnExistingRelColumn(BTreeFile bTreeFile, String relName, int columnId)
@@ -583,14 +567,7 @@ public class DbmsEntry
         }
     }
 
-    private static boolean checkIfIndexExistsInDbMetaDataFile(String relName, int columnId)
-            throws
-            IOException,
-            FileScanException,
-            TupleUtilsException,
-            InvalidRelation,
-            Exception
-    {
+    public static boolean checkIfIndexExistsInDbMetaDataFile(String relName, int columnId) throws Exception {
         // No need to check if metadata file exists, as it is created when the db is
         // opened
 
@@ -867,8 +844,7 @@ public class DbmsEntry
         return relName + ".data";
     }
 
-    private static String getRelNameSpace(String dbName, String relName)
-    {
+    public static String getRelNameSpace(String dbName, String relName) {
         return dbName + "." + relName;
     }
 
