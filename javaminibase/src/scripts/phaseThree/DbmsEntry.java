@@ -141,16 +141,7 @@ public class DbmsEntry
             System.out.println("No DB open currently. Nothing closed.");
             return;
         }
-        try
-        {
-            SystemDefs.JavabaseBM.flushAllPages();
-        }
-        catch (PagePinnedException e)
-        {
-            e.printStackTrace();
-            System.out.println("Error flushing pages. Please try again.");
-        }
-
+        SystemDefs.JavabaseBM.flushAllPages();
         System.out.println(currentOpenDb + " pages flushed and DB closed.");
         currentOpenDb = null;
     }
@@ -328,6 +319,7 @@ public class DbmsEntry
 
             try
             {
+                // TODO : Add attribute name to the btree file name
                 BTreeFile bTreeFile = new BTreeFile(getRelNameSpace(currentOpenDb, relName), keyType, keySize, 1); // TODO : Full Delete for now
                 populateBTreeIndexOnExistingRelColumn(bTreeFile, relName, columnIdInt);
                 insertIndexIntoDbMetaDataFile(relName, columnIdInt);
