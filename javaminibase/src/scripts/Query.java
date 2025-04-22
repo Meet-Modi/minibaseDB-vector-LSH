@@ -418,7 +418,7 @@ public class Query
         }
         else if (query_specification.startsWith("Filter("))
         {
-
+            // need to check specifications for implementation.
         }
         else
         {
