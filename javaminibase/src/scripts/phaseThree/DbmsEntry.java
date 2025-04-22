@@ -390,17 +390,11 @@ public class DbmsEntry
         querySpecification = querySpecification.trim();
 
         // Query specification handling
-        if (querySpecification.startsWith("Filter(") || querySpecification.startsWith("Range(") || querySpecification.startsWith("NN("))
+        if ( querySpecification.startsWith("Sort(")||querySpecification.startsWith("Filter(") || querySpecification.startsWith("Range(") || querySpecification.startsWith("NN("))
         {
             Query.queryHandler(currentOpenDb, querySpecificaionFile, numBuf, rel1Name);
         }
-        else if (querySpecification.startsWith("Sort("))
-        {
-            // create a new query specification file to do a non-index NN search on the entire relation
 
-            // call query handler on with the query specificaiton file.
-
-        }
         else if (querySpecification.startsWith("DJOIN("))
         {
 
