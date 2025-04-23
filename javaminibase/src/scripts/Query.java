@@ -399,7 +399,7 @@ public class Query
             Vector100Dtype target_vector = read_target_vector(target_vector_file_name);
 
             // Print the query details
-            System.out.println("Range Query Parsed:");
+            System.out.println("Sort Query Parsed:");
             System.out.println("QA: " + vector_field_number + ", D: " + distance + ", target vector: " + Arrays.toString(target_vector.vector));
             System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
 
@@ -416,11 +416,7 @@ public class Query
             queryResult = openDeleteAndOpenHeapFile(QUERY_RESULTS_HEAPFILE_NAME);
             scan = new RSIndexScan(null, relName, relName, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, distance);
         }
-        else if (query_specification.startsWith("Filter("))
-        {
-            // need to check specifications for implementation.
-            // random comment to commit to
-        }
+
         else
         {
             throw new RuntimeException("query_specification is not a valid query_specification.");

@@ -1,5 +1,6 @@
 package scripts.phaseThree;
 
+import btree.*;
 import diskmgr.Pcounter;
 import global.AttrType;
 import global.RID;
@@ -16,12 +17,7 @@ import heap.InvalidTypeException;
 import heap.Scan;
 import heap.SpaceNotAvailableException;
 import heap.Tuple;
-import iterator.FileScan;
-import iterator.FileScanException;
-import iterator.FldSpec;
-import iterator.InvalidRelation;
-import iterator.RelSpec;
-import iterator.TupleUtilsException;
+import iterator.*;
 
 
 import java.io.BufferedWriter;
@@ -35,14 +31,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner;
+import java.util.stream.IntStream;
 
 import LSHFIndex.LSHFIndex;
-import btree.BTreeFile;
-import btree.KeyClass;
-import btree.RealKey;
-import btree.StringKey;
 import bufmgr.PagePinnedException;
-import btree.IntegerKey;
 import scripts.Query;
 
 import static global.GlobalConst.NUMBUF;
@@ -54,6 +46,19 @@ public class DbmsEntry
     public static final short MAX_STRING_LENGTH = 64;
     private static final Scanner scanner = new Scanner(System.in);
     private static String currentOpenDb = null;
+
+    // DBMETADATA attribute definitions
+    private static final AttrType[] DBMETADATA_TUPLE_ATTR_TYPES = new AttrType[1];
+    static
+    {
+        DBMETADATA_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
+    }
+    private static final short[] DBMETADATA_TUPLE_STRING_LENGTHS = new short[] { MAX_STRING_LENGTH };
+    private static final FldSpec[] DBMETADATA_TUPLE_PROJ_LIST = new FldSpec[DBMETADATA_TUPLE_ATTR_TYPES.length];
+    static
+    {
+        IntStream.range(0, DBMETADATA_TUPLE_PROJ_LIST.length).forEach(i -> DBMETADATA_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
+    }
 
     public static void main(String[] args)
             throws
@@ -395,6 +400,48 @@ public class DbmsEntry
             Query.queryHandler(currentOpenDb, querySpecificaionFile, numBuf, rel1Name);
         }
 
+        else if (querySpecification.startsWith("Filter("))
+        {
+            int outputFieldNumbers[];
+            String QUERY_RESULTS_HEAPFILE_NAME;
+
+            String specifications = querySpecification.substring("Filter(".length(), querySpecification.length() - 1);
+            String[] parameters = specifications.split(",");
+
+            // Extract the parameters from the query specification.
+            int vector_field_number = Integer.parseInt(parameters[0].trim());
+            int target_value = Integer.parseInt(parameters[1].trim());
+            String k_value = parameters[2].trim();
+            String indexOption = parameters[3].trim();
+
+            outputFieldNumbers = new int[parameters.length - 4];
+            for (int i = 4; i < parameters.length; i++)
+            {
+                outputFieldNumbers[i - 4] = Integer.parseInt(parameters[i].trim());
+            }
+
+            QUERY_RESULTS_HEAPFILE_NAME = "Filter"+rel1Name+parameters[0].trim()+target_value+indexOption;
+            if (indexOption.equals("Y"))
+            {
+                // TODO: Currently, btreeFile scan only works for integer and string.
+                //       Need to test for integers first. then extend functionality for other data types.
+                BTreeFile bTreeIndexFile = new BTreeFile(getIndexFileName(currentOpenDb, rel1Name, vector_field_number));
+                KeyClass key = new IntegerKey(target_value);
+                BTFileScan btScan = bTreeIndexFile.new_scan(key,key);
+                KeyDataEntry entry = btScan.get_next();
+                while (entry != null)
+                {
+                    System.out.println(entry.data.toString());
+                    entry = btScan.get_next();
+
+                }
+
+            }
+            else
+            {
+                // use normal file scan
+            }
+        }
         else if (querySpecification.startsWith("DJOIN("))
         {
 
@@ -884,6 +931,27 @@ public class DbmsEntry
     private static String getRelDataFilePath(String dbName, String relName)
     {
         return System.getProperty("user.name") + "." + dbName + "." + getRelDataFileName(relName);
+    }
+
+    private static String getIndexFileName(String dbName, String relName, int columnNumber) throws Exception
+    {
+        String dbMetaDataFileName = getDbMetaDataFileName(dbName);
+        String indexFileName;
+        FileScan dbMetaDataFileScan = new FileScan(dbMetaDataFileName, DBMETADATA_TUPLE_ATTR_TYPES, DBMETADATA_TUPLE_STRING_LENGTHS, (short) DBMETADATA_TUPLE_ATTR_TYPES.length, (short) DBMETADATA_TUPLE_ATTR_TYPES.length, DBMETADATA_TUPLE_PROJ_LIST, null);
+        Tuple indexData = dbMetaDataFileScan.get_next();
+        while (indexData != null)
+        {
+            if (indexData.getStrFld(1) == "index:" + relName + "." + columnNumber)
+            {
+
+                indexFileName = indexData.getStrFld(1);
+                dbMetaDataFileScan.close();
+                return indexFileName;
+            }
+            indexData = dbMetaDataFileScan.get_next();
+        }
+        System.out.println("Index file not found. Please create index");
+        return null;
     }
 
 }
