@@ -395,7 +395,7 @@ public class DbmsEntry
         querySpecification = querySpecification.trim();
 
         // Query specification handling
-        if ( querySpecification.startsWith("Sort(")||querySpecification.startsWith("Filter(") || querySpecification.startsWith("Range(") || querySpecification.startsWith("NN("))
+        if ( querySpecification.startsWith("Sort(") || querySpecification.startsWith("Range(") || querySpecification.startsWith("NN("))
         {
             Query.queryHandler(currentOpenDb, querySpecificaionFile, numBuf, rel1Name);
         }
@@ -421,6 +421,7 @@ public class DbmsEntry
             }
 
             QUERY_RESULTS_HEAPFILE_NAME = "Filter"+rel1Name+parameters[0].trim()+target_value+indexOption;
+
             if (indexOption.equals("Y"))
             {
                 // TODO: Currently, btreeFile scan only works for integer and string.
