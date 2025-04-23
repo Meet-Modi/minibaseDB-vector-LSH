@@ -425,6 +425,8 @@ public class DbmsEntry
             {
                 // TODO: Currently, btreeFile scan only works for integer and string.
                 //       Need to test for integers first. then extend functionality for other data types.
+                Heapfile dataFile = new Heapfile(rel1Name);
+                Heapfile queryResult = new Heapfile(QUERY_RESULTS_HEAPFILE_NAME);
                 BTreeFile bTreeIndexFile = new BTreeFile(getIndexFileName(currentOpenDb, rel1Name, vector_field_number));
                 KeyClass key = new IntegerKey(target_value);
                 BTFileScan btScan = bTreeIndexFile.new_scan(key,key);
@@ -434,6 +436,8 @@ public class DbmsEntry
                     System.out.println(entry.data.toString());
                     entry = btScan.get_next();
 
+                    Tuple resultTuple = dataFile.getRecord(((LeafData)entry.data).getData());
+                    queryResult.insertRecord(resultTuple.getTupleByteArray());
                 }
 
             }
@@ -954,4 +958,5 @@ public class DbmsEntry
         return null;
     }
 
+    }
 }
