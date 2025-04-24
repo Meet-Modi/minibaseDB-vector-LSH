@@ -898,27 +898,27 @@ public class DbmsEntry {
         return dbName + "." + relName;
     }
 
-    private static String getDbPath(String dbName)
+    public static String getDbPath(String dbName)
     {
         return "/tmp/" + System.getProperty("user.name") + "." + dbName + "-db";
     }
 
-    private static String getDbMetadataFilePath(String dbName)
+    public static String getDbMetadataFilePath(String dbName)
     {
         return dbName + "-db.metadata";
     }
 
-    private static String getRelMetaDataFilePath(String dbName, String relName)
+    public static String getRelMetaDataFilePath(String dbName, String relName)
     {
         return dbName + "." + relName + ".metadata";
     }
 
-    private static String getRelDataFilePath(String dbName, String relName)
+    public static String getRelDataFilePath(String dbName, String relName)
     {
         return dbName + "." + relName + ".data";
     }
 
-    private static String getIndexFileName(String dbName, String relName, int columnNumber) throws Exception
+    public static String getIndexFileName(String dbName, String relName, int columnNumber) throws Exception
     {
         String dbMetaDataFileName = getDbMetadataFilePath(dbName);
         String indexFileName;
