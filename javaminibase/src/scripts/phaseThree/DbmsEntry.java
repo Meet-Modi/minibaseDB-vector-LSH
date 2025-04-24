@@ -40,8 +40,7 @@ import scripts.Query;
 import static global.GlobalConst.NUMBUF;
 import static global.SystemDefs.JavabaseBM;
 
-public class DbmsEntry
-{
+public class DbmsEntry {
     public static final int DB_SIZE_IN_PAGES = NUMBUF * 10;
     public static final short MAX_STRING_LENGTH = 64;
     private static final Scanner scanner = new Scanner(System.in);
@@ -921,7 +920,7 @@ public class DbmsEntry
 
     private static String getIndexFileName(String dbName, String relName, int columnNumber) throws Exception
     {
-        String dbMetaDataFileName = getDbMetaDataFileName(dbName);
+        String dbMetaDataFileName = getDbMetadataFilePath(dbName);
         String indexFileName;
         FileScan dbMetaDataFileScan = new FileScan(dbMetaDataFileName, DBMETADATA_TUPLE_ATTR_TYPES, DBMETADATA_TUPLE_STRING_LENGTHS, (short) DBMETADATA_TUPLE_ATTR_TYPES.length, (short) DBMETADATA_TUPLE_ATTR_TYPES.length, DBMETADATA_TUPLE_PROJ_LIST, null);
         Tuple indexData = dbMetaDataFileScan.get_next();
@@ -938,7 +937,5 @@ public class DbmsEntry
         }
         System.out.println("Index file not found. Please create index");
         return null;
-    }
-
     }
 }
