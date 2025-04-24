@@ -282,7 +282,7 @@ public class DbmsEntry
             int binLength = 1_000_000_000;
             try
             {
-                LSHFIndex lshfIndex = new LSHFIndex(getRelNameSpace(currentOpenDb, relName), numLayers, binLength, numHashes, columnIdInt);
+                LSHFIndex lshfIndex = new LSHFIndex(getRelNameColSpace(relName, columnIdInt), numLayers, binLength, numHashes, columnIdInt);
                 populateLSHFIndexOnExistingRelColumn(lshfIndex, relName, columnIdInt);
                 insertIndexIntoDbMetaDataFile(relName, columnIdInt);
             }
@@ -319,8 +319,7 @@ public class DbmsEntry
 
             try
             {
-                // TODO : Add attribute name to the btree file name
-                BTreeFile bTreeFile = new BTreeFile(getRelNameSpace(currentOpenDb, relName), keyType, keySize, 1); // TODO : Full Delete for now
+                BTreeFile bTreeFile = new BTreeFile(getRelNameColSpace(relName, columnIdInt), keyType, keySize, 1); // TODO : Full Delete for now
                 populateBTreeIndexOnExistingRelColumn(bTreeFile, relName, columnIdInt);
                 insertIndexIntoDbMetaDataFile(relName, columnIdInt);
             }
@@ -838,19 +837,9 @@ public class DbmsEntry
         new Heapfile(getDbMetadataFilePath(dbName));
     }
 
-    private static String getDbMetaDataFileName(String dbName)
+    public static String getRelNameColSpace(String relName, int columnId)
     {
-        return dbName + "-db.metadata";
-    }
-
-    private static String getRelMetaDataFileName(String relName)
-    {
-        return relName + ".metadata";
-    }
-
-    private static String getRelDataFileName(String relName)
-    {
-        return relName + ".data";
+        return relName + "." + columnId;
     }
 
     public static String getRelNameSpace(String dbName, String relName)
@@ -865,17 +854,17 @@ public class DbmsEntry
 
     private static String getDbMetadataFilePath(String dbName)
     {
-        return System.getProperty("user.name") + "." + getDbMetaDataFileName(dbName);
+        return dbName + "-db.metadata";
     }
 
     private static String getRelMetaDataFilePath(String dbName, String relName)
     {
-        return System.getProperty("user.name") + "." + dbName + "." + getRelMetaDataFileName(relName);
+        return dbName + "." + relName + ".metadata";
     }
 
     private static String getRelDataFilePath(String dbName, String relName)
     {
-        return System.getProperty("user.name") + "." + dbName + "." + getRelDataFileName(relName);
+        return dbName + "." + relName + ".data";
     }
 
 }

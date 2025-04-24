@@ -282,14 +282,14 @@ public class LSHFIndex
         for (int layer = 0; layer < hashValues.length; layer++)
         {
             String hashValue = hashValues[layer];
-            Heapfile heapFile = new Heapfile(generateBinHeapFileName(layer, attributeColumnNumber, hashValue));
+            Heapfile heapFile = new Heapfile(generateBinHeapFileName(relationName, layer, attributeColumnNumber, hashValue));
             insertRIDIntoHeapfile(heapFile, rid);
         }
     }
 
-    public static String generateBinHeapFileName(int layer, int attributeColumnNumber, String hash)
+    public static String generateBinHeapFileName(String relation, int layer, int attributeColumnNumber, String hash)
     {
-        return "col" + attributeColumnNumber + "lay" + layer + "bin" + hash;
+        return "rel" + relation + "col" + attributeColumnNumber + "lay" + layer + "bin" + hash;
     }
 
     private void insertRIDIntoHeapfile(Heapfile heapFile, RID rid)
@@ -312,7 +312,7 @@ public class LSHFIndex
         List<String> binNames = new ArrayList<>();
         for (int layer = 0; layer < hashValues.length; layer++)
         {
-            binNames.add(generateBinHeapFileName(layer, attributeColumnNumber, hashValues[layer]));
+            binNames.add(generateBinHeapFileName(relationName, layer, attributeColumnNumber, hashValues[layer]));
         }
         return binNames;
     }
