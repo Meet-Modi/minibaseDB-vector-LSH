@@ -223,7 +223,7 @@ public class BatchInsert implements GlobalConst
 //        runs. I am not sure why the Exception is raised and why this suppresses it
         System.out.println("DB Creation Complete. Running sample query...");
         createTempQueryAndTargetFiles(vectorFieldNumbers.get(0));
-        Query.main(new String[]{database_name, TEMP_QUERY_FILE_NAME, "N", String.valueOf(DB_SIZE_IN_PAGES)});
+//        Query.main(new String[]{database_name, TEMP_QUERY_FILE_NAME, "N", String.valueOf(DB_SIZE_IN_PAGES)});
         deleteTempQueryAndTargetFiles();
     }
 

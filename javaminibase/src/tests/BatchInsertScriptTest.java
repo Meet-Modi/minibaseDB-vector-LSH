@@ -258,9 +258,9 @@ public class BatchInsertScriptTest {
             HashMap<Integer, HashSet<String>> layerToUniqueHashesMap = vectorFieldNumberToLayerToUniqueHashesMap.get(vectorFieldNumber);
             for(int i = 0 ; i < Integer.parseInt(NUM_LAYERS); i ++) {
                 for(String hash : layerToUniqueHashesMap.get(i)) {
-                    Heapfile hf = new Heapfile(LSHFIndex.generateBinHeapFileName(i, vectorFieldNumber, hash));
+//                    Heapfile hf = new Heapfile(LSHFIndex.generateBinHeapFileName(i, vectorFieldNumber, hash));
                     HashMap<Integer, Integer> layerToNumberOfRecords = vectorFieldNumberToLayerToNumberOfRecords.compute(vectorFieldNumber, (k,v) -> (v == null) ? new HashMap<>() : v);
-                    layerToNumberOfRecords.put(i, layerToNumberOfRecords.getOrDefault(i, 0) + hf.getRecCnt());
+//                    layerToNumberOfRecords.put(i, layerToNumberOfRecords.getOrDefault(i, 0) + hf.getRecCnt());
                 }
             }
         }

@@ -109,7 +109,11 @@ public class DbmsEntry {
         System.out.println("Quitting...");
     }
 
-    public static void handleDbOpenCommand(String[] commandParts)
+    public static void handleDbOpenCommand(String[] commandParts) throws Exception {
+        handleDbOpenCommand(commandParts, DB_SIZE_IN_PAGES);
+    }
+
+    public static void handleDbOpenCommand(String[] commandParts, int numBuf)
             throws
             Exception
     {
@@ -133,7 +137,7 @@ public class DbmsEntry {
             System.out.println(dbName + " already exists. Restarting...");
             SystemDefs.MINIBASE_RESTART_FLAG = true;
         }
-        new SystemDefs(dbPath, DB_SIZE_IN_PAGES, DB_SIZE_IN_PAGES, "Clock");
+        new SystemDefs(dbPath, DB_SIZE_IN_PAGES, numBuf, "Clock");
         createOrOpenDbMetaDataFile(dbName);
 
         System.out.println("Opened db " + dbName + " at " + dbPath);
@@ -186,13 +190,14 @@ public class DbmsEntry {
 
         if (relExists(relName))
         {
-            throw new Exception("Relation " + relName + " already exists.");
+            System.out.println("Relation " + relName + " already exists.");
+            return;
         }
 
         System.out.println("Creating relation " + relName + " from file " + dataFilePath);
         System.out.println("Db Metadata file : " + getDbMetadataFilePath(currentOpenDb));
         System.out.println("Relation Metadata file : " + getRelMetaDataFilePath(currentOpenDb, relName));
-        System.out.println("Data file : " + getRelDataFilePath(currentOpenDb, relName));
+        System.out.println("Data file : " + getRelDataFileName(relName));
 
         BufferedReader br = new BufferedReader(new FileReader(dataFilePath));
         String line = br.readLine();
@@ -290,7 +295,7 @@ public class DbmsEntry {
             int binLength = 1_000_000_000;
             try
             {
-                LSHFIndex lshfIndex = new LSHFIndex(getRelNameColSpace(relName, columnIdInt), numLayers, binLength, numHashes, columnIdInt);
+                LSHFIndex lshfIndex = new LSHFIndex(relName, numLayers, binLength, numHashes, columnIdInt);
                 populateLSHFIndexOnExistingRelColumn(lshfIndex, relName, columnIdInt);
                 insertIndexIntoDbMetaDataFile(relName, columnIdInt, "LSHF");
             }
@@ -431,14 +436,23 @@ public class DbmsEntry {
         if (rel1Name == null)
         {
             System.out.println("Relation 1 name is null. Please provide a valid relation name.");
+            return;
         }
+        if(! checkIfRelExistsInDbMetaDataFile(rel1Name))
+        {
+            System.out.println(rel1Name + " relation does not exist. Please ensure it has been created before using it.");
+            return;
+        }
+        // TODO Divesh - Check if rel2Name exists (Similar to above) in DbMetadata for Joins, since that's the only operator that uses rel2
         if (rel2Name == null)
         {
             System.out.println("Relation 2 name is null. Please provide a valid relation name.");
+            return;
         }
         if (querySpecificaionFile == null)
         {
             System.out.println("query specification file is null. Please provide a valid query specific file.");
+            return;
         }
 
         // Start reading Query specification and process queries
@@ -447,28 +461,44 @@ public class DbmsEntry {
         if (querySpecification == null)
         {
             System.out.println("query specification file is null. Please provide a valid query specific file.");
+            return;
         }
         querySpecification = querySpecification.trim();
+
+        // Restart DB with numbuf
+        final String CLOSED_DB_NAME = currentOpenDb;
+        handleDbCloseCommand();
+        handleDbOpenCommand(new String[] {SupportedCommands.OPEN_DB.getCommand(), CLOSED_DB_NAME}, Integer.parseInt(numBuf));
 
         // Query specification handling
         if ( querySpecification.startsWith("Sort(") || querySpecification.startsWith("Range(") || querySpecification.startsWith("NN("))
         {
-            Query.queryHandler(currentOpenDb, querySpecificaionFile, numBuf, rel1Name);
+            Query.queryHandler(querySpecificaionFile, numBuf, rel1Name, getRelationAttrTypes(rel1Name));
         }
 
         else if (querySpecification.startsWith("Filter("))
         {
             int outputFieldNumbers[];
-            String QUERY_RESULTS_HEAPFILE_NAME;
 
             String specifications = querySpecification.substring("Filter(".length(), querySpecification.length() - 1);
             String[] parameters = specifications.split(",");
 
             // Extract the parameters from the query specification.
-            int vector_field_number = Integer.parseInt(parameters[0].trim());
+            int non_vector_field_number = Integer.parseInt(parameters[0].trim());
             int target_value = Integer.parseInt(parameters[1].trim());
             String k_value = parameters[2].trim();
             String indexOption = parameters[3].trim();
+
+            if(indexOption.equals("Y") && ! DbmsEntry.checkIfIndexExistsInDbMetaDataFile(rel1Name, non_vector_field_number)) {
+                System.out.println("Index option is Y but index does not exist for relation = " + rel1Name + " on fieldNumber = " + non_vector_field_number + ". Pls create an index before using it");
+                return;
+            }
+
+            AttrType[] attrTypes = getRelationAttrTypes(rel1Name);
+            if(attrTypes[non_vector_field_number - 1].attrType == AttrType.attrVector100D) {
+                System.out.println("Filter query is not possible on a 100D vector column.");
+                return;
+            }
 
             outputFieldNumbers = new int[parameters.length - 4];
             for (int i = 4; i < parameters.length; i++)
@@ -476,27 +506,35 @@ public class DbmsEntry {
                 outputFieldNumbers[i - 4] = Integer.parseInt(parameters[i].trim());
             }
 
-            QUERY_RESULTS_HEAPFILE_NAME = "Filter"+rel1Name+parameters[0].trim()+target_value+indexOption;
-
             if (indexOption.equals("Y"))
             {
-                // TODO: Currently, btreeFile scan only works for integer and string.
+                // TODO Divesh: Currently, btreeFile scan only works for integer and string.
                 //       Need to test for integers first. then extend functionality for other data types.
-                Heapfile dataFile = new Heapfile(rel1Name);
-                Heapfile queryResult = new Heapfile(QUERY_RESULTS_HEAPFILE_NAME);
-                BTreeFile bTreeIndexFile = new BTreeFile(getIndexFileName(currentOpenDb, rel1Name, vector_field_number));
+                Heapfile dataFile = new Heapfile(getRelDataFileName(rel1Name));
+                Heapfile queryResult = new Heapfile(Query.QUERY_RESULTS_HEAPFILE_NAME);
                 KeyClass key = new IntegerKey(target_value);
-                BTFileScan btScan = bTreeIndexFile.new_scan(key,key);
-                KeyDataEntry entry = btScan.get_next();
-                while (entry != null)
-                {
-                    System.out.println(entry.data.toString());
-                    entry = btScan.get_next();
+                BTreeFile bTreeIndexFile = new BTreeFile(getRelNameColSpace(rel1Name, non_vector_field_number));
+                BTFileScan btScan = bTreeIndexFile.new_scan(key, key);
+                try {
+                    System.out.println("\n ---Output Tuples---");
 
-                    Tuple resultTuple = dataFile.getRecord(((LeafData)entry.data).getData());
-                    queryResult.insertRecord(resultTuple.getTupleByteArray());
+                    KeyDataEntry entry = btScan.get_next();
+                    while (entry != null) {
+                        Tuple resultTuple = dataFile.getRecord(((LeafData) entry.data).getData());
+                        resultTuple.setHdr(
+                                (short) attrTypes.length,
+                                attrTypes,
+                                TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes));
+
+                        TupleUtils.printFieldsFromTuple(resultTuple, attrTypes, outputFieldNumbers);
+                        queryResult.insertRecord(resultTuple.getTupleByteArray());
+                        entry = btScan.get_next();
+                    }
+                } finally {
+                    btScan.DestroyBTreeFileScan();
+                    bTreeIndexFile.close();
                 }
-
+                System.out.println("\n ---End Output---");
             }
             else
             {
@@ -516,6 +554,10 @@ public class DbmsEntry {
             String distanceJoinRangeQuerySpecificationFile = rel1Name + rel2Name + "DJOIN";
             // Step 2: using results from step 1, join on relation 2.
         }
+
+        // Restart DB with old buffer count
+        handleDbCloseCommand();
+        handleDbOpenCommand(new String[] {SupportedCommands.OPEN_DB.getCommand(), CLOSED_DB_NAME});
     }
 
     // Helper methods
@@ -536,7 +578,7 @@ public class DbmsEntry {
             Exception
     {
 
-        Heapfile heapfile = new Heapfile(getRelDataFilePath(currentOpenDb, relName));
+        Heapfile heapfile = new Heapfile(getRelDataFileName(relName));
         Scan scan = heapfile.openScan();
         RID rid = new RID();
         Tuple tuple = new Tuple();
@@ -598,7 +640,7 @@ public class DbmsEntry {
             Exception
     {
 
-        Heapfile heapfile = new Heapfile(getRelDataFilePath(currentOpenDb, relName));
+        Heapfile heapfile = new Heapfile(getRelDataFileName(relName));
         Scan scan = heapfile.openScan();
         RID rid = new RID();
         Tuple tuple = new Tuple();
@@ -832,7 +874,7 @@ public class DbmsEntry {
         t = new Tuple();
         t.setHdr(numAttributes, metadataAttrTypes, stringLengths);
 
-        Heapfile file = new Heapfile(getRelDataFilePath(currentOpenDb, relName));
+        Heapfile file = new Heapfile(getRelDataFileName(relName));
         String tupleValue;
         boolean endOfFile = false;
 
@@ -960,7 +1002,7 @@ public class DbmsEntry {
             HFDiskMgrException,
             IOException
     {
-        new Heapfile(getRelDataFilePath(currentOpenDb, relName));
+        new Heapfile(getRelDataFileName(relName));
     }
 
     private static void createRelMetaDataFile(String relName, short numAttributes, String[] attributeTypes)
@@ -1023,12 +1065,12 @@ public class DbmsEntry {
         return relName + "." + columnId;
     }
 
-    public static String getRelNameSpace(String dbName, String relName)
+    public static String getRelDataFileName(String relName)
     {
-        return dbName + "." + relName;
+        return relName + ".data";
     }
 
-    public static String getDbPath(String dbName)
+    private static String getDbPath(String dbName)
     {
         return "/tmp/" + System.getProperty("user.name") + "." + dbName + "-db";
     }

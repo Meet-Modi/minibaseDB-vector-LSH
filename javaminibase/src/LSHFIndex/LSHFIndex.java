@@ -5,7 +5,6 @@ import global.*;
 import heap.*;
 import iterator.*;
 import scripts.Query;
-import scripts.ScriptMetrics;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -328,7 +327,6 @@ public class LSHFIndex
         // attr[1] - slotNo
 
         // Dump all the record ID's from all the bins into ridDump
-        ScriptMetrics.setTimeUnionDeduplicationStart();
         Heapfile ridDump = openDeleteAndOpenHeapFile(RID_DUMP_HEAP_FILE_NAME);
         for (String hash : hashValues)
         {
@@ -387,8 +385,6 @@ public class LSHFIndex
             ridDumpScan.close();
             ridDump.deleteFile();
         }
-        ScriptMetrics.setTimeUnionDeduplicationEnd();
-        ScriptMetrics.setTimeUnionDataCopyStart();
 
         // Read from CLEAN_RID_DUMP_HEAP_FILE, extract the tuple for that RID in the Data File, insert into union dump.
         // Expected no duplicates
@@ -409,7 +405,6 @@ public class LSHFIndex
 
             cleanRidTuple = cleanRidScan.get_next();
         }
-        ScriptMetrics.setTimeUnionDataCopyEnd();
         cleanRidScan.close();
         cleanRidDump.deleteFile();
 
