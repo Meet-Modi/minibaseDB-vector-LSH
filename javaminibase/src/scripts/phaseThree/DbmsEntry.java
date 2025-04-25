@@ -30,6 +30,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.stream.IntStream;
 
@@ -288,7 +290,7 @@ public class DbmsEntry {
             {
                 LSHFIndex lshfIndex = new LSHFIndex(getRelNameColSpace(relName, columnIdInt), numLayers, binLength, numHashes, columnIdInt);
                 populateLSHFIndexOnExistingRelColumn(lshfIndex, relName, columnIdInt);
-                insertIndexIntoDbMetaDataFile(relName, columnIdInt);
+                insertIndexIntoDbMetaDataFile(relName, columnIdInt, "LSHF");
             }
             catch (Exception e)
             {
@@ -325,7 +327,7 @@ public class DbmsEntry {
             {
                 BTreeFile bTreeFile = new BTreeFile(getRelNameColSpace(relName, columnIdInt), keyType, keySize, 1); // TODO : Full Delete for now
                 populateBTreeIndexOnExistingRelColumn(bTreeFile, relName, columnIdInt);
-                insertIndexIntoDbMetaDataFile(relName, columnIdInt);
+                insertIndexIntoDbMetaDataFile(relName, columnIdInt, "Btree");
             }
             catch (Exception e)
             {
@@ -341,6 +343,68 @@ public class DbmsEntry {
             return;
         }
         System.out.println("BTree index created on column " + columnIdInt + " of relation " + relName);
+    }
+
+    public static void handleBatchInsertCommand(String[] commandParts) throws Exception 
+    {
+        if (currentOpenDb == null) {
+            System.out.println("No DB open currently. Please open a new db first.");
+            return;
+        }
+
+        String dataFilePath = commandParts[1];
+        String relName = commandParts[2];
+
+        if (commandParts.length != 3 || !commandParts[0].equals(SupportedCommands.BATCH_INSERT.getCommand())) {
+            System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_INSERT.getUsage());
+            return;
+        }
+
+        if (dataFilePath == null || relName == null) {
+            System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_INSERT.getUsage());
+            return;
+        }
+
+        if (!Files.exists(Paths.get(dataFilePath))) {
+            System.out.println("Data file " + dataFilePath + " does not exist.");
+            return;
+        }
+
+        try {
+            if(!relExists(relName)) {
+                System.out.println("Relation " + relName + " does not exist. Please create it first.");
+                return;
+            }
+        }
+        catch (Exception e) {
+            System.out.println("Error checking relation: " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
+
+        BufferedReader br = new BufferedReader(new FileReader(dataFilePath));
+        String line = br.readLine();
+        if (line == null)
+        {
+            br.close();
+            throw new Exception("Empty file");
+        }
+
+        short numAttributes = Short.parseShort(line.trim());
+        line = br.readLine();
+        if (line == null)
+        {
+            br.close();
+            throw new Exception("Attribute types missing");
+        }
+        String[] attributeTypes = line.split("\\s+");
+        if (attributeTypes.length != numAttributes)
+        {
+            br.close();
+            throw new Exception("Attribute count and number of attribute types provided mismatch");
+        }
+        batchInsertDataIntoRel(br, relName, numAttributes, attributeTypes);
+        br.close();
     }
 
     public static void handleQueryCommand(String[] commandParts) throws
@@ -638,7 +702,7 @@ public class DbmsEntry {
         Tuple t = dbMetaDataScan.get_next();
         while (t != null)
         {
-            if (t.getStrFld(1).equals("index:" + relName + "." + columnId))
+            if (t.getStrFld(1).startsWith("index:" + relName + "." + columnId))
             {
                 dbMetaDataScan.close();
                 return true;
@@ -703,7 +767,7 @@ public class DbmsEntry {
         dbMetaDataFile.insertRecord(dbMetaDataTuple.getTupleByteArray());
     }
 
-    private static void insertIndexIntoDbMetaDataFile(String relName, int columnId)
+    private static void insertIndexIntoDbMetaDataFile(String relName, int columnId, String indexType)
             throws
             HFException,
             HFBufMgrException,
@@ -722,13 +786,11 @@ public class DbmsEntry {
         stringLengths[0] = MAX_STRING_LENGTH;
         Tuple dbMetaDataTuple = new Tuple();
         dbMetaDataTuple.setHdr((short) 1, dbmetaDataAttrTypes, stringLengths);
-        dbMetaDataTuple.setStrFld(1, "index:" + relName + "." + columnId);
+        dbMetaDataTuple.setStrFld(1, "index:" + relName + "." + columnId + "." + indexType);
         dbMetaDataFile.insertRecord(dbMetaDataTuple.getTupleByteArray());
     }
 
-    private static void batchInsertDataIntoRel(
-            BufferedReader br, String relName, short numAttributes,
-            String[] attributeTypes)
+    private static void batchInsertDataIntoRel(BufferedReader br, String relName, short numAttributes, String[] attributeTypes)
             throws
             HFException,
             HFBufMgrException,
@@ -771,6 +833,8 @@ public class DbmsEntry {
         Heapfile file = new Heapfile(getRelDataFilePath(currentOpenDb, relName));
         String tupleValue;
         boolean endOfFile = false;
+
+        List<String[]> indexInfos = getAllRelationIndexInfos(currentOpenDb, relName);
 
         while (true)
         {
@@ -815,12 +879,76 @@ public class DbmsEntry {
             }
             if (endOfFile)
                 break;
-            file.insertRecord(t.getTupleByteArray());
+            RID rid = file.insertRecord(t.getTupleByteArray());
+            updateIndexesOnInsert(relName, indexInfos, t, rid);
         }
         JavabaseBM.flushAllPages();
-        System.out.println(
-                "File " + getRelDataFilePath(currentOpenDb, relName) + " created with " + file.getRecCnt()
-                        + " records.");
+        System.out.println("File " + getRelDataFilePath(currentOpenDb, relName) + " created with " + file.getRecCnt() + " records.");
+    }
+
+    private static void updateIndexesOnInsert(String relName, List<String[]> indexInfos, Tuple t, RID rid) throws Exception {    
+        for (String[] indexInfo : indexInfos) {
+            int columnId = Integer.parseInt(indexInfo[0]);
+            String indexType = indexInfo[1];
+            String indexFileName = getRelNameColSpace(relName, columnId);
+            if (indexType.equals("Btree")) 
+            {
+                BTreeFile bTreeFile = new BTreeFile(indexFileName);
+                AttrType[] attrTypes = getRelationAttrTypes(relName);
+                KeyClass key = null;
+
+                switch (attrTypes[columnId - 1].attrType) 
+                {
+                    case AttrType.attrString:
+                        key = new StringKey(t.getStrFld(columnId));
+                        break;
+                    case AttrType.attrInteger:
+                        key = new IntegerKey(t.getIntFld(columnId));
+                        break;
+                    case AttrType.attrReal:
+                        key = new RealKey(t.getFloFld(columnId));
+                        break;
+                    default:
+                        throw new IOException("Unsupported attribute type for BTree index: " + attrTypes[columnId - 1].attrType);
+                }
+                bTreeFile.insert(key, rid);
+                bTreeFile.close();
+            }
+            else if (indexType.equals("LSHF")) 
+            {
+                LSHFIndex lshfIndex = new LSHFIndex(indexFileName, columnId);
+                Vector100Dtype vector = t.get100DVectFld(columnId);
+                lshfIndex.insertRecord(vector, rid);
+                // No lshfIndex.close() method in the current implementation
+            }
+        }
+    }
+
+    // returns a list of index info for the relation
+    // example: [["1", "Btree"], ["2", "LSHF"]]
+    // where 1 is the column number and Btree is the index type
+    private static List<String[]> getAllRelationIndexInfos(String dbName, String relName) throws Exception
+    {   
+        List<String[]> indexInfo = new ArrayList<>();
+
+        short[] stringLengths = new short[1];
+        stringLengths[0] = MAX_STRING_LENGTH;
+        FileScan dbMetaDataScan = new FileScan(getDbMetadataFilePath(currentOpenDb), new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1, new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
+
+        Tuple tuple = dbMetaDataScan.get_next();
+        
+        while (tuple != null)
+        {
+            if(tuple.getStrFld(1).startsWith("index:" + relName))
+            {
+                String indexString = tuple.getStrFld(1);
+                String[] parts = indexString.split("\\.");
+                indexInfo.add(new String[]{parts[2], parts[3]});
+            }
+            tuple = dbMetaDataScan.get_next();
+        }
+        dbMetaDataScan.close();
+        return indexInfo;
     }
 
     private static void createDataFile(String relName)
