@@ -61,9 +61,7 @@ public class DbmsEntry {
         IntStream.range(0, DBMETADATA_TUPLE_PROJ_LIST.length).forEach(i -> DBMETADATA_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
     }
 
-    public static void main(String[] args)
-            throws
-            Exception
+    public static void main(String[] args) throws Exception
     {
         while (true)
         {
@@ -91,6 +89,10 @@ public class DbmsEntry {
             {
                 handleIndexCreateCommand(commandParts);
             }
+            else if (commandParts[0].equals(SupportedCommands.BATCH_INSERT.getCommand()))
+            {
+                handleBatchInsertCommand(commandParts);
+            }       
             else if (commandParts[0].equals(SupportedCommands.QUERY.getCommand()))
             {
                 handleQueryCommand(commandParts);
