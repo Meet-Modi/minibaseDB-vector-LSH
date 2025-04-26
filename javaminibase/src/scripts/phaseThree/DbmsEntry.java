@@ -20,23 +20,18 @@ import heap.Tuple;
 import iterator.*;
 
 
-import java.io.BufferedWriter;
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 import java.util.stream.IntStream;
 
 import LSHFIndex.LSHFIndex;
-import bufmgr.PagePinnedException;
 import scripts.Query;
 
 import static global.GlobalConst.NUMBUF;
@@ -45,6 +40,7 @@ import static global.SystemDefs.JavabaseBM;
 public class DbmsEntry {
     public static final int DB_SIZE_IN_PAGES = NUMBUF * 10;
     public static final short MAX_STRING_LENGTH = 64;
+    public static final String DB_METADATA_FILE_NAME = "db.metadata";
     private static final Scanner scanner = new Scanner(System.in);
     private static String currentOpenDb = null;
 
@@ -195,8 +191,8 @@ public class DbmsEntry {
         }
 
         System.out.println("Creating relation " + relName + " from file " + dataFilePath);
-        System.out.println("Db Metadata file : " + getDbMetadataFilePath(currentOpenDb));
-        System.out.println("Relation Metadata file : " + getRelMetaDataFilePath(currentOpenDb, relName));
+        System.out.println("Db Metadata file : " + DB_METADATA_FILE_NAME);
+        System.out.println("Relation Metadata file : " + getRelMetaDataFileName(relName));
         System.out.println("Data file : " + getRelDataFileName(relName));
 
         BufferedReader br = new BufferedReader(new FileReader(dataFilePath));
@@ -332,7 +328,7 @@ public class DbmsEntry {
 
             try
             {
-                BTreeFile bTreeFile = new BTreeFile(getRelNameColSpace(relName, columnIdInt), keyType, keySize, 1); // TODO : Full Delete for now
+                BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnIdInt), keyType, keySize, 1); // TODO : Full Delete for now
                 populateBTreeIndexOnExistingRelColumn(bTreeFile, relName, columnIdInt);
                 insertIndexIntoDbMetaDataFile(relName, columnIdInt, "Btree");
             }
@@ -513,7 +509,7 @@ public class DbmsEntry {
                 Heapfile dataFile = new Heapfile(getRelDataFileName(rel1Name));
                 Heapfile queryResult = new Heapfile(Query.QUERY_RESULTS_HEAPFILE_NAME);
                 KeyClass key = new IntegerKey(target_value);
-                BTreeFile bTreeIndexFile = new BTreeFile(getRelNameColSpace(rel1Name, non_vector_field_number));
+                BTreeFile bTreeIndexFile = new BTreeFile(getBTreeFileName(rel1Name, non_vector_field_number));
                 BTFileScan btScan = bTreeIndexFile.new_scan(key, key);
                 try {
                     System.out.println("\n ---Output Tuples---");
@@ -675,8 +671,8 @@ public class DbmsEntry {
             InvalidRelation,
             Exception
     {
-        Heapfile relMetaDataFile = new Heapfile(getRelMetaDataFilePath(currentOpenDb, relName));
-        FileScan relMetaDataScan = new FileScan(getRelMetaDataFilePath(currentOpenDb, relName),
+        Heapfile relMetaDataFile = new Heapfile(getRelMetaDataFileName(relName));
+        FileScan relMetaDataScan = new FileScan(getRelMetaDataFileName(relName),
                 new AttrType[]{new AttrType(AttrType.attrInteger)}, null, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
@@ -739,7 +735,7 @@ public class DbmsEntry {
 
         short[] stringLengths = new short[1];
         stringLengths[0] = MAX_STRING_LENGTH;
-        FileScan dbMetaDataScan = new FileScan(getDbMetadataFilePath(currentOpenDb),
+        FileScan dbMetaDataScan = new FileScan(DB_METADATA_FILE_NAME,
                 new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
@@ -770,7 +766,7 @@ public class DbmsEntry {
 
         short[] stringLengths = new short[1];
         stringLengths[0] = MAX_STRING_LENGTH;
-        FileScan dbMetaDataScan = new FileScan(getDbMetadataFilePath(currentOpenDb),
+        FileScan dbMetaDataScan = new FileScan(DB_METADATA_FILE_NAME,
                 new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
@@ -800,7 +796,7 @@ public class DbmsEntry {
             InvalidSlotNumberException,
             SpaceNotAvailableException
     {
-        Heapfile dbMetaDataFile = new Heapfile(getDbMetadataFilePath(currentOpenDb));
+        Heapfile dbMetaDataFile = new Heapfile(DB_METADATA_FILE_NAME);
         AttrType[] dbmetaDataAttrTypes = new AttrType[1];
         dbmetaDataAttrTypes[0] = new AttrType(AttrType.attrString);
         short[] stringLengths = new short[1];
@@ -823,7 +819,7 @@ public class DbmsEntry {
             InvalidSlotNumberException,
             SpaceNotAvailableException
     {
-        Heapfile dbMetaDataFile = new Heapfile(getDbMetadataFilePath(currentOpenDb));
+        Heapfile dbMetaDataFile = new Heapfile(DB_METADATA_FILE_NAME);
         AttrType[] dbmetaDataAttrTypes = new AttrType[1];
         dbmetaDataAttrTypes[0] = new AttrType(AttrType.attrString);
         short[] stringLengths = new short[1];
@@ -848,8 +844,8 @@ public class DbmsEntry {
     {
         short stringAttributeCount = 0;
 
-        Heapfile relMetaDataFile = new Heapfile(getRelMetaDataFilePath(currentOpenDb, relName));
-        FileScan relMetaDataScan = new FileScan(getRelMetaDataFilePath(currentOpenDb, relName),
+        Heapfile relMetaDataFile = new Heapfile(getRelMetaDataFileName(relName));
+        FileScan relMetaDataScan = new FileScan(getRelMetaDataFileName(relName),
                 new AttrType[]{new AttrType(AttrType.attrInteger)}, null, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
@@ -927,17 +923,16 @@ public class DbmsEntry {
             updateIndexesOnInsert(relName, indexInfos, t, rid);
         }
         JavabaseBM.flushAllPages();
-        System.out.println("File " + getRelDataFilePath(currentOpenDb, relName) + " created with " + file.getRecCnt() + " records.");
+        System.out.println("File " + getRelDataFileName(relName) + " created with " + file.getRecCnt() + " records.");
     }
 
     private static void updateIndexesOnInsert(String relName, List<String[]> indexInfos, Tuple t, RID rid) throws Exception {    
         for (String[] indexInfo : indexInfos) {
             int columnId = Integer.parseInt(indexInfo[0]);
             String indexType = indexInfo[1];
-            String indexFileName = getRelNameColSpace(relName, columnId);
-            if (indexType.equals("Btree")) 
+            if (indexType.equals("Btree"))
             {
-                BTreeFile bTreeFile = new BTreeFile(indexFileName);
+                BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnId));
                 AttrType[] attrTypes = getRelationAttrTypes(relName);
                 KeyClass key = null;
 
@@ -960,7 +955,7 @@ public class DbmsEntry {
             }
             else if (indexType.equals("LSHF")) 
             {
-                LSHFIndex lshfIndex = new LSHFIndex(indexFileName, columnId);
+                LSHFIndex lshfIndex = new LSHFIndex(relName, columnId);
                 Vector100Dtype vector = t.get100DVectFld(columnId);
                 lshfIndex.insertRecord(vector, rid);
                 // No lshfIndex.close() method in the current implementation
@@ -977,7 +972,7 @@ public class DbmsEntry {
 
         short[] stringLengths = new short[1];
         stringLengths[0] = MAX_STRING_LENGTH;
-        FileScan dbMetaDataScan = new FileScan(getDbMetadataFilePath(currentOpenDb), new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1, new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
+        FileScan dbMetaDataScan = new FileScan(DB_METADATA_FILE_NAME, new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1, new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
         Tuple tuple = dbMetaDataScan.get_next();
         
@@ -1023,7 +1018,7 @@ public class DbmsEntry {
         Tuple metaDataTuple = new Tuple();
         metaDataTuple.setHdr((short) 1, new AttrType[]{new AttrType(AttrType.attrInteger)}, null);
 
-        Heapfile dataFileMetaData = new Heapfile(getRelMetaDataFilePath(currentOpenDb, relName));
+        Heapfile dataFileMetaData = new Heapfile(getRelMetaDataFileName(relName));
         for (int i = 0; i < numAttributes; i++)
         {
             int type = Integer.parseInt(attributeTypes[i].trim());
@@ -1057,10 +1052,10 @@ public class DbmsEntry {
             HFDiskMgrException,
             IOException
     {
-        new Heapfile(getDbMetadataFilePath(dbName));
+        new Heapfile(DB_METADATA_FILE_NAME);
     }
 
-    public static String getRelNameColSpace(String relName, int columnId)
+    public static String getBTreeFileName(String relName, int columnId)
     {
         return relName + "." + columnId;
     }
@@ -1075,39 +1070,8 @@ public class DbmsEntry {
         return "/tmp/" + System.getProperty("user.name") + "." + dbName + "-db";
     }
 
-    public static String getDbMetadataFilePath(String dbName)
+    public static String getRelMetaDataFileName(String relName)
     {
-        return dbName + "-db.metadata";
-    }
-
-    public static String getRelMetaDataFilePath(String dbName, String relName)
-    {
-        return dbName + "." + relName + ".metadata";
-    }
-
-    public static String getRelDataFilePath(String dbName, String relName)
-    {
-        return dbName + "." + relName + ".data";
-    }
-
-    public static String getIndexFileName(String dbName, String relName, int columnNumber) throws Exception
-    {
-        String dbMetaDataFileName = getDbMetadataFilePath(dbName);
-        String indexFileName;
-        FileScan dbMetaDataFileScan = new FileScan(dbMetaDataFileName, DBMETADATA_TUPLE_ATTR_TYPES, DBMETADATA_TUPLE_STRING_LENGTHS, (short) DBMETADATA_TUPLE_ATTR_TYPES.length, (short) DBMETADATA_TUPLE_ATTR_TYPES.length, DBMETADATA_TUPLE_PROJ_LIST, null);
-        Tuple indexData = dbMetaDataFileScan.get_next();
-        while (indexData != null)
-        {
-            if (indexData.getStrFld(1) == "index:" + relName + "." + columnNumber)
-            {
-
-                indexFileName = indexData.getStrFld(1);
-                dbMetaDataFileScan.close();
-                return indexFileName;
-            }
-            indexData = dbMetaDataFileScan.get_next();
-        }
-        System.out.println("Index file not found. Please create index");
-        return null;
+        return relName + ".metadata";
     }
 }

@@ -159,11 +159,10 @@ public class DbmsEntryTest {
             throw new RuntimeException("FAIL - testBatchCreate - DB file missing!");
 
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", relNameOne });
-        String dbMetaDataFilePath = DbmsEntry.getDbMetadataFilePath(dbNameOne);
-        String relMetadataFilePath = DbmsEntry.getRelMetaDataFilePath(dbNameOne, relNameOne);
+        String relMetadataFilePath = DbmsEntry.getRelMetaDataFileName(relNameOne);
         String dataFilePathFull = DbmsEntry.getRelDataFileName(relNameOne);
 
-        Heapfile dbMetaDataFile = new Heapfile(dbMetaDataFilePath);
+        Heapfile dbMetaDataFile = new Heapfile(DbmsEntry.DB_METADATA_FILE_NAME);
         Heapfile metadataFile = new Heapfile(relMetadataFilePath);
         Heapfile dataFile = new Heapfile(dataFilePathFull);
 
@@ -201,7 +200,7 @@ public class DbmsEntryTest {
 
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", relNameTwo });
 
-        relMetadataFilePath = DbmsEntry.getRelMetaDataFilePath(dbNameOne, relNameTwo);
+        relMetadataFilePath = DbmsEntry.getRelMetaDataFileName(relNameTwo);
         dataFilePathFull = DbmsEntry.getRelDataFileName(relNameTwo);
         
         metadataFile = new Heapfile(relMetadataFilePath);
@@ -243,11 +242,10 @@ public class DbmsEntryTest {
 
         DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample75_000.txt", relNameOne });
 
-        String dbMetaDataFilePath = DbmsEntry.getDbMetadataFilePath(dbNameOne);
-        String relMetadataFilePath = DbmsEntry.getRelMetaDataFilePath(dbNameOne, relNameOne);
+        String relMetadataFilePath = DbmsEntry.getRelMetaDataFileName(relNameOne);
         String dataFilePathFull = DbmsEntry.getRelDataFileName(relNameOne);
 
-        Heapfile dbMetaDataFile = new Heapfile(dbMetaDataFilePath);
+        Heapfile dbMetaDataFile = new Heapfile(DbmsEntry.DB_METADATA_FILE_NAME);
         Heapfile metadataFile = new Heapfile(relMetadataFilePath);
         Heapfile dataFile = new Heapfile(dataFilePathFull);
 
@@ -289,7 +287,7 @@ public class DbmsEntryTest {
                 throw new RuntimeException("FAIL - testCreateIndex - Mismatch between data in txt file and bTree!");
 
         };
-        readFullBTreeIndex.accept(DbmsEntry.getRelNameColSpace(relNameOne, 3));
+        readFullBTreeIndex.accept(DbmsEntry.getBTreeFileName(relNameOne, 3));
 
         Consumer<String> searchBTreeAndVerifyRecord = (btreeFileName) -> {
             try {
@@ -325,7 +323,7 @@ public class DbmsEntryTest {
                 throw new RuntimeException(e);
             }
         };
-        searchBTreeAndVerifyRecord.accept(DbmsEntry.getRelNameColSpace(relNameOne, 3));
+        searchBTreeAndVerifyRecord.accept(DbmsEntry.getBTreeFileName(relNameOne, 3));
 
         // LSH Index on Vector field
         DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relNameOne, "4", "2", "2"});
@@ -385,8 +383,8 @@ public class DbmsEntryTest {
         // Reopen DB to check if files preserved
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
 
-        readFullBTreeIndex.accept(DbmsEntry.getRelNameColSpace(relNameOne, 3));
-        searchBTreeAndVerifyRecord.accept(DbmsEntry.getRelNameColSpace(relNameOne, 3));
+        readFullBTreeIndex.accept(DbmsEntry.getBTreeFileName(relNameOne, 3));
+        searchBTreeAndVerifyRecord.accept(DbmsEntry.getBTreeFileName(relNameOne, 3));
 
         LSHFIndex lshfIndexAfterDbClose = new LSHFIndex(relNameOne, 4);
         verifyLshIndexHasAllTuples.accept(lshfIndexAfterDbClose);
