@@ -135,7 +135,6 @@ public class DbmsEntry {
             SystemDefs.MINIBASE_RESTART_FLAG = true;
         }
         new SystemDefs(dbPath, DB_SIZE_IN_PAGES, numBuf, "Clock");
-        createOrOpenDbMetaDataFile(dbName);
 
         System.out.println("Opened db " + dbName + " at " + dbPath);
         currentOpenDb = dbName;
@@ -294,7 +293,7 @@ public class DbmsEntry {
             {
                 LSHFIndex lshfIndex = new LSHFIndex(relName, numLayers, binLength, numHashes, columnIdInt);
                 populateLSHFIndexOnExistingRelColumn(lshfIndex, relName, columnIdInt);
-                insertIndexIntoDbMetaDataFile(relName, columnIdInt, IndexType.LSHF.toString());
+                insertIndexIntoDbMetaDataFile(relName, columnIdInt, IndexType.LSHF);
             }
             catch (Exception e)
             {
@@ -331,7 +330,7 @@ public class DbmsEntry {
             {
                 BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnIdInt), keyType, keySize, 1); // TODO : Full Delete for now
                 populateBTreeIndexOnExistingRelColumn(bTreeFile, relName, columnIdInt);
-                insertIndexIntoDbMetaDataFile(relName, columnIdInt, IndexType.BTREE.toString());
+                insertIndexIntoDbMetaDataFile(relName, columnIdInt, IndexType.BTREE);
             }
             catch (Exception e)
             {
@@ -494,6 +493,7 @@ public class DbmsEntry {
             // Extract the parameters from the query specification.
             int non_vector_field_number = Integer.parseInt(parameters[0].trim());
             int target_value = Integer.parseInt(parameters[1].trim());
+            // TODO Divesh - Use the k value
             String k_value = parameters[2].trim();
             String indexOption = parameters[3].trim();
 
@@ -571,18 +571,6 @@ public class DbmsEntry {
     // Helper methods
     private static void populateBTreeIndexOnExistingRelColumn(BTreeFile bTreeFile, String relName, int columnId)
             throws
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            IOException,
-            InvalidTypeException,
-            InvalidTupleSizeException,
-            FieldNumberOutOfBoundException,
-            InvalidSlotNumberException,
-            SpaceNotAvailableException,
-            FileScanException,
-            TupleUtilsException,
-            InvalidRelation,
             Exception
     {
 
@@ -633,18 +621,6 @@ public class DbmsEntry {
 
     private static void populateLSHFIndexOnExistingRelColumn(LSHFIndex lshfIndex, String relName, int columnId)
             throws
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            IOException,
-            InvalidTypeException,
-            InvalidTupleSizeException,
-            FieldNumberOutOfBoundException,
-            InvalidSlotNumberException,
-            SpaceNotAvailableException,
-            FileScanException,
-            TupleUtilsException,
-            InvalidRelation,
             Exception
     {
 
@@ -677,10 +653,6 @@ public class DbmsEntry {
 
     public static AttrType[] getRelationAttrTypes(String relName)
             throws
-            IOException,
-            FileScanException,
-            TupleUtilsException,
-            InvalidRelation,
             Exception
     {
         Heapfile relMetaDataFile = new Heapfile(getRelMetaDataFileName(relName));
@@ -703,10 +675,6 @@ public class DbmsEntry {
 
     private static boolean indexExists(String relName, int columnId)
             throws
-            IOException,
-            FileScanException,
-            TupleUtilsException,
-            InvalidRelation,
             Exception
     {
         // TODO : Check if the heap file also exists?
@@ -722,10 +690,6 @@ public class DbmsEntry {
 
     private static boolean relExists(String relName)
             throws
-            IOException,
-            FileScanException,
-            TupleUtilsException,
-            InvalidRelation,
             Exception
     {
         // TODO : Check if the heap file also exists?
@@ -767,10 +731,6 @@ public class DbmsEntry {
 
     private static boolean checkIfRelExistsInDbMetaDataFile(String relName)
             throws
-            IOException,
-            FileScanException,
-            TupleUtilsException,
-            InvalidRelation,
             Exception
     {
         // No need to check if metadata file exists, as it is created when the db is
@@ -798,15 +758,7 @@ public class DbmsEntry {
 
     private static void insertRelIntoDbMetaDataFile(String relName)
             throws
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            IOException,
-            InvalidTypeException,
-            InvalidTupleSizeException,
-            FieldNumberOutOfBoundException,
-            InvalidSlotNumberException,
-            SpaceNotAvailableException
+            Exception
     {
         Heapfile dbMetaDataFile = new Heapfile(DB_METADATA_FILE_NAME);
         AttrType[] dbmetaDataAttrTypes = new AttrType[1];
@@ -819,17 +771,9 @@ public class DbmsEntry {
         dbMetaDataFile.insertRecord(dbMetaDataTuple.getTupleByteArray());
     }
 
-    private static void insertIndexIntoDbMetaDataFile(String relName, int columnId, String indexType)
+    private static void insertIndexIntoDbMetaDataFile(String relName, int columnId, IndexType indexType)
             throws
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            IOException,
-            InvalidTypeException,
-            InvalidTupleSizeException,
-            FieldNumberOutOfBoundException,
-            InvalidSlotNumberException,
-            SpaceNotAvailableException
+            Exception
     {
         Heapfile dbMetaDataFile = new Heapfile(DB_METADATA_FILE_NAME);
         AttrType[] dbmetaDataAttrTypes = new AttrType[1];
@@ -916,7 +860,7 @@ public class DbmsEntry {
             {
                 BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnId));
                 AttrType[] attrTypes = getRelationAttrTypes(relName);
-                KeyClass key = null;
+                KeyClass key;
 
                 switch (attrTypes[columnId - 1].attrType) 
                 {
@@ -974,10 +918,7 @@ public class DbmsEntry {
 
     private static void createDataFile(String relName)
             throws
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            IOException
+            Exception
     {
         new Heapfile(getRelDataFileName(relName));
     }
@@ -1010,16 +951,6 @@ public class DbmsEntry {
             case 4 -> 5; // 100D-vector.
             default -> throw new RuntimeException("Unknown attribute type " + inType);
         };
-    }
-
-    private static void createOrOpenDbMetaDataFile(String dbName)
-            throws
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            IOException
-    {
-        new Heapfile(DB_METADATA_FILE_NAME);
     }
 
     public static String getBTreeFileName(String relName, int columnId)
