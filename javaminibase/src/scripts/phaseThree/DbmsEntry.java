@@ -73,31 +73,32 @@ public class DbmsEntry {
             if (commandParts[0].equals(SupportedCommands.OPEN_DB.getCommand()))
             {
                 handleDbOpenCommand(commandParts);
+                Pcounter.printPcounter();
+                continue;
             }
             else if (commandParts[0].equals(SupportedCommands.CLOSE_DB.getCommand()))
             {
                 handleDbCloseCommand();
+                Pcounter.printPcounter();
+                continue;
             }
-            else if (commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand()))
-            {
-                handleBatchCreateCommand(commandParts);
-            }
-            else if (commandParts[0].equals(SupportedCommands.CREATE_INDEX.getCommand()))
-            {
-                handleIndexCreateCommand(commandParts);
-            }
-            else if (commandParts[0].equals(SupportedCommands.BATCH_INSERT.getCommand()))
-            {
-                handleBatchInsertCommand(commandParts);
-            }       
-            else if (commandParts[0].equals(SupportedCommands.QUERY.getCommand()))
-            {
-                handleQueryCommand(commandParts);
-            }
-            else
-            {
-                System.out.println("Unrecognized command. Quitting...");
-                break;
+
+            // TODO Vikram - Run a no-index range scan with max buf. This is to handle the unknown error when low numbuf passed later
+            try {
+                if (commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand())) {
+                    handleBatchCreateCommand(commandParts);
+                } else if (commandParts[0].equals(SupportedCommands.CREATE_INDEX.getCommand())) {
+                    handleIndexCreateCommand(commandParts);
+                } else if (commandParts[0].equals(SupportedCommands.BATCH_INSERT.getCommand())) {
+                    handleBatchInsertCommand(commandParts);
+                } else if (commandParts[0].equals(SupportedCommands.QUERY.getCommand())) {
+                    handleQueryCommand(commandParts);
+                } else {
+                    System.out.println("Unrecognized command. Quitting...");
+                    break;
+                }
+            } finally {
+                SystemDefs.JavabaseBM.flushAllPages();
             }
             Pcounter.printPcounter();
         }
@@ -573,50 +574,33 @@ public class DbmsEntry {
             throws
             Exception
     {
-
         Heapfile heapfile = new Heapfile(getRelDataFileName(relName));
         Scan scan = heapfile.openScan();
-        RID rid = new RID();
-        Tuple tuple = new Tuple();
+        try {
+            RID rid = new RID();
+            Tuple tuple = new Tuple();
 
-        AttrType[] attrTypes = getRelationAttrTypes(relName);
-        short stringAttributeCount = 0;
+            AttrType[] attrTypes = getRelationAttrTypes(relName);
+            short[] stringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes);
 
-        for (int i = 0; i < attrTypes.length; i++)
-        {
-            if (attrTypes[i].attrType == AttrType.attrString)
-            {
-                stringAttributeCount++;
+            while ((tuple = scan.getNext(rid)) != null) {
+                tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
+                KeyClass key = null;
+                if (attrTypes[columnId - 1].attrType == AttrType.attrString) {
+                    key = new StringKey(tuple.getStrFld(columnId));
+                } else if (attrTypes[columnId - 1].attrType == AttrType.attrInteger) {
+                    key = new IntegerKey(tuple.getIntFld(columnId));
+                } else if (attrTypes[columnId - 1].attrType == AttrType.attrReal) {
+                    key = new RealKey(tuple.getFloFld(columnId));
+                } else {
+                    throw new IOException("Unknown attribute type" + attrTypes[columnId].attrType);
+                }
+                bTreeFile.insert(key, rid);
             }
+        } finally {
+            scan.closescan();
+            bTreeFile.close();
         }
-
-        short[] stringLengths = new short[stringAttributeCount];
-        Arrays.fill(stringLengths, MAX_STRING_LENGTH);
-
-        while ((tuple = scan.getNext(rid)) != null)
-        {
-            tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
-            KeyClass key = null;
-            if (attrTypes[columnId - 1].attrType == AttrType.attrString)
-            {
-                key = new StringKey(tuple.getStrFld(columnId));
-            }
-            else if (attrTypes[columnId - 1].attrType == AttrType.attrInteger)
-            {
-                key = new IntegerKey(tuple.getIntFld(columnId));
-            }
-            else if (attrTypes[columnId - 1].attrType == AttrType.attrReal)
-            {
-                key = new RealKey(tuple.getFloFld(columnId));
-            }
-            else
-            {
-                throw new IOException("Unknown attribute type" + attrTypes[columnId].attrType);
-            }
-            bTreeFile.insert(key, rid);
-        }
-        scan.closescan();
-        bTreeFile.close();
     }
 
     private static void populateLSHFIndexOnExistingRelColumn(LSHFIndex lshfIndex, String relName, int columnId)
@@ -626,29 +610,20 @@ public class DbmsEntry {
 
         Heapfile heapfile = new Heapfile(getRelDataFileName(relName));
         Scan scan = heapfile.openScan();
-        RID rid = new RID();
-        Tuple tuple = new Tuple();
+        try {
+            RID rid = new RID();
+            Tuple tuple = new Tuple();
 
-        AttrType[] attrTypes = getRelationAttrTypes(relName);
-        short stringAttributeCount = 0;
+            AttrType[] attrTypes = getRelationAttrTypes(relName);
+            short[] stringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes);
 
-        for (int i = 0; i < attrTypes.length; i++)
-        {
-            if (attrTypes[i].attrType == AttrType.attrString)
-            {
-                stringAttributeCount++;
+            while ((tuple = scan.getNext(rid)) != null) {
+                tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
+                lshfIndex.insertRecord(tuple.get100DVectFld(columnId), rid);
             }
+        } finally {
+            scan.closescan();
         }
-
-        short[] stringLengths = new short[stringAttributeCount];
-        Arrays.fill(stringLengths, MAX_STRING_LENGTH);
-
-        while ((tuple = scan.getNext(rid)) != null)
-        {
-            tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
-            lshfIndex.insertRecord(tuple.get100DVectFld(columnId), rid);
-        }
-        scan.closescan();
     }
 
     public static AttrType[] getRelationAttrTypes(String relName)
@@ -660,17 +635,19 @@ public class DbmsEntry {
                 new AttrType[]{new AttrType(AttrType.attrInteger)}, null, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
-        AttrType[] metadataAttrTypes = new AttrType[relMetaDataFile.getRecCnt()];
-        Tuple t = relMetaDataScan.get_next();
-        int i = 0;
-        while (t != null)
-        {
-            metadataAttrTypes[i] = new AttrType((t.getIntFld(1)));
-            t = relMetaDataScan.get_next();
-            i++;
+        try {
+            AttrType[] metadataAttrTypes = new AttrType[relMetaDataFile.getRecCnt()];
+            Tuple t = relMetaDataScan.get_next();
+            int i = 0;
+            while (t != null) {
+                metadataAttrTypes[i] = new AttrType((t.getIntFld(1)));
+                t = relMetaDataScan.get_next();
+                i++;
+            }
+            return metadataAttrTypes;
+        } finally {
+            relMetaDataScan.close();
         }
-        relMetaDataScan.close();
-        return metadataAttrTypes;
     }
 
     private static boolean indexExists(String relName, int columnId)
@@ -715,18 +692,18 @@ public class DbmsEntry {
                 new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
-        Tuple t = dbMetaDataScan.get_next();
-        while (t != null)
-        {
-            if (t.getStrFld(1).startsWith("index:" + relName + "." + columnId))
-            {
-                dbMetaDataScan.close();
-                return true;
+        try {
+            Tuple t = dbMetaDataScan.get_next();
+            while (t != null) {
+                if (t.getStrFld(1).startsWith("index:" + relName + "." + columnId)) {
+                    return true;
+                }
+                t = dbMetaDataScan.get_next();
             }
-            t = dbMetaDataScan.get_next();
+            return false;
+        } finally {
+            dbMetaDataScan.close();
         }
-        dbMetaDataScan.close();
-        return false;
     }
 
     private static boolean checkIfRelExistsInDbMetaDataFile(String relName)
@@ -742,18 +719,18 @@ public class DbmsEntry {
                 new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
-        Tuple t = dbMetaDataScan.get_next();
-        while (t != null)
-        {
-            if (t.getStrFld(1).equals("relation:" + relName))
-            {
-                dbMetaDataScan.close();
-                return true;
+        try {
+            Tuple t = dbMetaDataScan.get_next();
+            while (t != null) {
+                if (t.getStrFld(1).equals("relation:" + relName)) {
+                    return true;
+                }
+                t = dbMetaDataScan.get_next();
             }
-            t = dbMetaDataScan.get_next();
+            return false;
+        } finally {
+            dbMetaDataScan.close();
         }
-        dbMetaDataScan.close();
-        return false;
     }
 
     private static void insertRelIntoDbMetaDataFile(String relName)
@@ -848,7 +825,6 @@ public class DbmsEntry {
             RID rid = file.insertRecord(t.getTupleByteArray());
             updateIndexesOnInsert(relName, indexInfos, t, rid);
         }
-        JavabaseBM.flushAllPages();
         System.out.println("File " + getRelDataFileName(relName) + " created with " + file.getRecCnt() + " records.");
     }
 
@@ -859,25 +835,27 @@ public class DbmsEntry {
             if (indexType.equals(IndexType.BTREE.toString()))
             {
                 BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnId));
-                AttrType[] attrTypes = getRelationAttrTypes(relName);
-                KeyClass key;
+                try {
+                    AttrType[] attrTypes = getRelationAttrTypes(relName);
+                    KeyClass key;
 
-                switch (attrTypes[columnId - 1].attrType) 
-                {
-                    case AttrType.attrString:
-                        key = new StringKey(t.getStrFld(columnId));
-                        break;
-                    case AttrType.attrInteger:
-                        key = new IntegerKey(t.getIntFld(columnId));
-                        break;
-                    case AttrType.attrReal:
-                        key = new RealKey(t.getFloFld(columnId));
-                        break;
-                    default:
-                        throw new IOException("Unsupported attribute type for BTree index: " + attrTypes[columnId - 1].attrType);
+                    switch (attrTypes[columnId - 1].attrType) {
+                        case AttrType.attrString:
+                            key = new StringKey(t.getStrFld(columnId));
+                            break;
+                        case AttrType.attrInteger:
+                            key = new IntegerKey(t.getIntFld(columnId));
+                            break;
+                        case AttrType.attrReal:
+                            key = new RealKey(t.getFloFld(columnId));
+                            break;
+                        default:
+                            throw new IOException("Unsupported attribute type for BTree index: " + attrTypes[columnId - 1].attrType);
+                    }
+                    bTreeFile.insert(key, rid);
+                } finally {
+                    bTreeFile.close();
                 }
-                bTreeFile.insert(key, rid);
-                bTreeFile.close();
             }
             else if (indexType.equals(IndexType.LSHF.toString()))
             {
@@ -900,19 +878,20 @@ public class DbmsEntry {
         stringLengths[0] = MAX_STRING_LENGTH;
         FileScan dbMetaDataScan = new FileScan(DB_METADATA_FILE_NAME, new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1, new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
-        Tuple tuple = dbMetaDataScan.get_next();
-        
-        while (tuple != null)
-        {
-            if(tuple.getStrFld(1).startsWith("index:" + relName))
-            {
-                String indexString = tuple.getStrFld(1);
-                String[] parts = indexString.split("\\.");
-                indexInfo.add(new String[]{parts[1], parts[2]});
+        try {
+            Tuple tuple = dbMetaDataScan.get_next();
+
+            while (tuple != null) {
+                if (tuple.getStrFld(1).startsWith("index:" + relName)) {
+                    String indexString = tuple.getStrFld(1);
+                    String[] parts = indexString.split("\\.");
+                    indexInfo.add(new String[]{parts[1], parts[2]});
+                }
+                tuple = dbMetaDataScan.get_next();
             }
-            tuple = dbMetaDataScan.get_next();
+        } finally {
+            dbMetaDataScan.close();
         }
-        dbMetaDataScan.close();
         return indexInfo;
     }
 
