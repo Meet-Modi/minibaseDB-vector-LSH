@@ -461,11 +461,8 @@ public class DbmsEntry
             String rangeQuerySpecification = rangeQuery.substring("Range(".length(), rangeQuery.length() - 1);
             String[] rangeQueryParameters = rangeQuerySpecification.split(",");
 
-            // Extract the rangeQueryParameters from the query specification for join processing
+            // Extract the rangeQueryParameters and only need rangeQueryVectorFieldNumber
             int rangeQueryVectorFieldNumber = Integer.parseInt(rangeQueryParameters[0].trim());
-            String rangeQueryFileName = rangeQueryParameters[1].trim();
-            int rangeQueryDistance = Integer.parseInt(rangeQueryParameters[2].trim());
-            String rangeQueryIndexOption = rangeQueryParameters[3].trim();
 
             // Write Range query to a file and call query handler.
             String dJoinRangeQuerySpecificationFile = rel1Name+"DJOIN";
@@ -473,7 +470,7 @@ public class DbmsEntry
             writer.write(rangeQuery);
             Query.queryHandler(currentOpenDb, dJoinRangeQuerySpecificationFile, numBuf, rel1Name);
 
-            // Extract Outer relation information
+            // Extract Right relation information
             String rel2Specification = br.readLine();
             rel2Specification = rel2Specification.trim();
             String[] parameters = rel2Specification.split(",");
@@ -488,7 +485,8 @@ public class DbmsEntry
 
             // Step 2: using results from step 1, join on relation 2.
             /* TODO Vikram: Ensure range query results have the same tuple header as rel1
-                            In line 488, define the file name that holds the query results.
+                            In line calling Filescan on range query results define the file name that holds the
+                            query results.
             *   */
 
             // Define Filescan on range query results
@@ -505,33 +503,6 @@ public class DbmsEntry
             IntStream.range(0, rel2ProjList.length).forEach(i -> rel2ProjList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
             FileScan rel2Scan = new FileScan(rel2Name, rel2AttrTypes, rel2StringLengths, (short) rel2AttrTypes.length, rel2AttrTypes.length, rel2ProjList, null);
 
-            // Prepare result tuple
-            Tuple resultTuple = new Tuple();
-
-            AttrType[] resultTupleAttrTypes = new AttrType[rangeQueryAttrTypes.length+rel2AttrTypes.length-1];
-            // Iterate over inner tuple attr types
-            for(int i = 0; i < rangeQueryAttrTypes.length; i++)
-            {
-                resultTupleAttrTypes[i] = rangeQueryAttrTypes[i];
-            }
-
-            // Iterate over rel2Attrtypes
-            for(int j = 0; j < rel2AttrTypes.length; j++)
-            {
-                if (j!= rel2FieldNumber)
-                    resultTupleAttrTypes[j+rangeQueryAttrTypes.length] = rel2AttrTypes[j];
-            }
-
-            // Define string lengths
-            short[] resultTupleStringLengths = new short[rangeQueryStringLengths.length+rel2StringLengths.length];
-            for(int i = 0; i < resultTupleStringLengths.length; i++)
-            {
-                resultTupleStringLengths[i] = MAX_STRING_LENGTH;
-            }
-
-            // set result tuple header
-            resultTuple.setHdr((short) (rangeQueryAttrTypes.length+rel2AttrTypes.length-1), resultTupleAttrTypes, resultTupleStringLengths);
-
             // Perform join
             Tuple rangeQueryTuple = rangeQueryResultsScan.get_next();
             while(rangeQueryTuple != null)
@@ -539,12 +510,7 @@ public class DbmsEntry
                 Tuple rel2Tuple = rel2Scan.get_next();
                 while(rel2Tuple != null)
                 {
-                    /* TODO: check if value of attribute to join on is the same in rangeQueryTuple and rel2Tuple
-                             if yes:
-                                    create new tuple with all attributes from range query + all remaining attr from rel2
-                                    insert into tuple relevant data
-                                    add tuple to result file.
-                    * */
+
                     AttrType fieldType = new AttrType(AttrType.attrVector100D);
                     int vectorDistance = TupleUtils.CompareTupleWithTuple(fieldType,rangeQueryTuple, rangeQueryVectorFieldNumber, rel2Tuple, rel2FieldNumber);
 
@@ -552,67 +518,7 @@ public class DbmsEntry
                     if (vectorDistance <= joinDistance)
                     {
 
-                        // Fill relation 1 fields into result
-                        for(int i = 0; i < rangeQueryAttrTypes.length; i++)
-                        {
-                            AttrType attrType = resultTupleAttrTypes[i];
-                            if (attrType.attrType == AttrType.attrInteger)
-                            {
-                                resultTuple.setIntFld(i+1, rangeQueryTuple.getIntFld(i+1));
-                            }
-                            else if (attrType.attrType == AttrType.attrReal)
-                            {
-                                resultTuple.setFloFld(i+1, rangeQueryTuple.getFloFld(i+1));
-                            }
-                            else if (attrType.attrType == AttrType.attrString)
-                            {
-                                resultTuple.setStrFld(i+1, rangeQueryTuple.getStrFld(i+1));
-                            }
-                            else if (attrType.attrType == AttrType.attrVector100D)
-                            {
-                                resultTuple.set100DVectFld(i+1, rangeQueryTuple.get100DVectFld(i+1));
-                            }
-                            else
-                            {
-                                System.out.println("ERROR: unexpected attr type: " + attrType.attrType);
-                            }
-                        }
-
-                        // Fill relation 2 fields into result tuple
-                        for (int j = 0; j < rel2AttrTypes.length; j++)
-                        {
-                            // if we are on the field number that matches the rel2fieldnumber, we do not add that field to the result tuple
-                            // since we already added it from rangeQueryResults that we get from relation 1 range query.
-                            if (j+1 == rel2FieldNumber)
-                            {
-                                continue;
-                            }
-                            int resultTupleOffset = rangeQueryAttrTypes.length + j;
-                            AttrType attrType = resultTupleAttrTypes[resultTupleOffset];
-
-                            if (attrType.attrType == AttrType.attrInteger)
-                            {
-                                resultTuple.setIntFld(resultTupleOffset, rel2Tuple.getIntFld(j+1));
-                            }
-                            else if (attrType.attrType == AttrType.attrReal)
-                            {
-                                resultTuple.setFloFld(resultTupleOffset, rangeQueryTuple.getFloFld(j+1));
-                            }
-                            else if (attrType.attrType == AttrType.attrString)
-                            {
-                                resultTuple.setStrFld(resultTupleOffset, rangeQueryTuple.getStrFld(j+1));
-                            }
-                            else if (attrType.attrType == AttrType.attrVector100D)
-                            {
-                                resultTuple.set100DVectFld(resultTupleOffset, rangeQueryTuple.get100DVectFld(j+1));
-                            }
-                            else
-                            {
-                                System.out.println("ERROR: unexpected attr type: " + attrType.attrType);
-                            }
-                        }
-
-                        /* TODO VIKRAM: tuple is ready here. Print the result or add to heapfile how ever you see fit.
+                        /* TODO VIKRAM: print rangeQueryTuple and rel2Tuple.
                         * */
                     }
                 }
