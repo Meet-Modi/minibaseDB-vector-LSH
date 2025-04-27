@@ -401,7 +401,7 @@ public class DbmsEntry
         }
 
         else if (querySpecification.startsWith("Filter("))
-        {
+          {
             int outputFieldNumbers[];
             String QUERY_RESULTS_HEAPFILE_NAME;
 
@@ -457,8 +457,170 @@ public class DbmsEntry
             rangeQuery = rangeQuery.trim();
             rangeQuery = rangeQuery.substring(0, rangeQuery.length() - 1);
 
-            String distanceJoinRangeQuerySpecificationFile = rel1Name + rel2Name + "DJOIN";
+            // Range Query Specification
+            String rangeQuerySpecification = rangeQuery.substring("Range(".length(), rangeQuery.length() - 1);
+            String[] rangeQueryParameters = rangeQuerySpecification.split(",");
+
+            // Extract the rangeQueryParameters from the query specification for join processing
+            int rangeQueryVectorFieldNumber = Integer.parseInt(rangeQueryParameters[0].trim());
+            String rangeQueryFileName = rangeQueryParameters[1].trim();
+            int rangeQueryDistance = Integer.parseInt(rangeQueryParameters[2].trim());
+            String rangeQueryIndexOption = rangeQueryParameters[3].trim();
+
+            // Write Range query to a file and call query handler.
+            String dJoinRangeQuerySpecificationFile = rel1Name+"DJOIN";
+            BufferedWriter writer = new BufferedWriter(new FileWriter(dJoinRangeQuerySpecificationFile));
+            writer.write(rangeQuery);
+            Query.queryHandler(currentOpenDb, dJoinRangeQuerySpecificationFile, numBuf, rel1Name);
+
+            // Extract Outer relation information
+            String rel2Specification = br.readLine();
+            rel2Specification = rel2Specification.trim();
+            String[] parameters = rel2Specification.split(",");
+            int rel2FieldNumber = Integer.parseInt(parameters[0].trim());
+            int joinDistance = Integer.parseInt(parameters[1].trim());
+            String indexOption = parameters[2].trim();
+            int[] outputFieldNumbers = new int[parameters.length - 3];
+            for (int i = 3; i < parameters.length; i++)
+            {
+                outputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
+            }
+
             // Step 2: using results from step 1, join on relation 2.
+            /* TODO Vikram: Ensure range query results have the same tuple header as rel1
+                            In line 488, define the file name that holds the query results.
+            *   */
+
+            // Define Filescan on range query results
+            AttrType[] rangeQueryAttrTypes = getRelationAttrTypes(rel1Name);
+            short[] rangeQueryStringLengths = getRelationStringLengths(rangeQueryAttrTypes);
+            FldSpec[] rangeQueryProjList = new FldSpec[rangeQueryAttrTypes.length];
+            IntStream.range(0, rangeQueryProjList.length).forEach(i -> rangeQueryProjList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
+            FileScan rangeQueryResultsScan = new FileScan(QUERY_RESULTS_HEAPFILE_NAME,rangeQueryAttrTypes,rangeQueryStringLengths, (short) rangeQueryAttrTypes.length, rangeQueryAttrTypes.length, rangeQueryProjList, null);
+
+            // Define filescan on outer relation
+            AttrType[] rel2AttrTypes = getRelationAttrTypes(rel2Name);
+            short[] rel2StringLengths = getRelationStringLengths(rel2AttrTypes);
+            FldSpec[] rel2ProjList = new FldSpec[rel2AttrTypes.length];
+            IntStream.range(0, rel2ProjList.length).forEach(i -> rel2ProjList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
+            FileScan rel2Scan = new FileScan(rel2Name, rel2AttrTypes, rel2StringLengths, (short) rel2AttrTypes.length, rel2AttrTypes.length, rel2ProjList, null);
+
+            // Prepare result tuple
+            Tuple resultTuple = new Tuple();
+
+            AttrType[] resultTupleAttrTypes = new AttrType[rangeQueryAttrTypes.length+rel2AttrTypes.length-1];
+            // Iterate over inner tuple attr types
+            for(int i = 0; i < rangeQueryAttrTypes.length; i++)
+            {
+                resultTupleAttrTypes[i] = rangeQueryAttrTypes[i];
+            }
+
+            // Iterate over rel2Attrtypes
+            for(int j = 0; j < rel2AttrTypes.length; j++)
+            {
+                if (j!= rel2FieldNumber)
+                    resultTupleAttrTypes[j+rangeQueryAttrTypes.length] = rel2AttrTypes[j];
+            }
+
+            // Define string lengths
+            short[] resultTupleStringLengths = new short[rangeQueryStringLengths.length+rel2StringLengths.length];
+            for(int i = 0; i < resultTupleStringLengths.length; i++)
+            {
+                resultTupleStringLengths[i] = MAX_STRING_LENGTH;
+            }
+
+            // set result tuple header
+            resultTuple.setHdr((short) (rangeQueryAttrTypes.length+rel2AttrTypes.length-1), resultTupleAttrTypes, resultTupleStringLengths);
+
+            // Perform join
+            Tuple rangeQueryTuple = rangeQueryResultsScan.get_next();
+            while(rangeQueryTuple != null)
+            {
+                Tuple rel2Tuple = rel2Scan.get_next();
+                while(rel2Tuple != null)
+                {
+                    /* TODO: check if value of attribute to join on is the same in rangeQueryTuple and rel2Tuple
+                             if yes:
+                                    create new tuple with all attributes from range query + all remaining attr from rel2
+                                    insert into tuple relevant data
+                                    add tuple to result file.
+                    * */
+                    AttrType fieldType = new AttrType(AttrType.attrVector100D);
+                    int vectorDistance = TupleUtils.CompareTupleWithTuple(fieldType,rangeQueryTuple, rangeQueryVectorFieldNumber, rel2Tuple, rel2FieldNumber);
+
+                    // Define result tuple fields
+                    if (vectorDistance <= joinDistance)
+                    {
+
+                        // Fill relation 1 fields into result
+                        for(int i = 0; i < rangeQueryAttrTypes.length; i++)
+                        {
+                            AttrType attrType = resultTupleAttrTypes[i];
+                            if (attrType.attrType == AttrType.attrInteger)
+                            {
+                                resultTuple.setIntFld(i+1, rangeQueryTuple.getIntFld(i+1));
+                            }
+                            else if (attrType.attrType == AttrType.attrReal)
+                            {
+                                resultTuple.setFloFld(i+1, rangeQueryTuple.getFloFld(i+1));
+                            }
+                            else if (attrType.attrType == AttrType.attrString)
+                            {
+                                resultTuple.setStrFld(i+1, rangeQueryTuple.getStrFld(i+1));
+                            }
+                            else if (attrType.attrType == AttrType.attrVector100D)
+                            {
+                                resultTuple.set100DVectFld(i+1, rangeQueryTuple.get100DVectFld(i+1));
+                            }
+                            else
+                            {
+                                System.out.println("ERROR: unexpected attr type: " + attrType.attrType);
+                            }
+                        }
+
+                        // Fill relation 2 fields into result tuple
+                        for (int j = 0; j < rel2AttrTypes.length; j++)
+                        {
+                            // if we are on the field number that matches the rel2fieldnumber, we do not add that field to the result tuple
+                            // since we already added it from rangeQueryResults that we get from relation 1 range query.
+                            if (j+1 == rel2FieldNumber)
+                            {
+                                continue;
+                            }
+                            int resultTupleOffset = rangeQueryAttrTypes.length + j;
+                            AttrType attrType = resultTupleAttrTypes[resultTupleOffset];
+
+                            if (attrType.attrType == AttrType.attrInteger)
+                            {
+                                resultTuple.setIntFld(resultTupleOffset, rel2Tuple.getIntFld(j+1));
+                            }
+                            else if (attrType.attrType == AttrType.attrReal)
+                            {
+                                resultTuple.setFloFld(resultTupleOffset, rangeQueryTuple.getFloFld(j+1));
+                            }
+                            else if (attrType.attrType == AttrType.attrString)
+                            {
+                                resultTuple.setStrFld(resultTupleOffset, rangeQueryTuple.getStrFld(j+1));
+                            }
+                            else if (attrType.attrType == AttrType.attrVector100D)
+                            {
+                                resultTuple.set100DVectFld(resultTupleOffset, rangeQueryTuple.get100DVectFld(j+1));
+                            }
+                            else
+                            {
+                                System.out.println("ERROR: unexpected attr type: " + attrType.attrType);
+                            }
+                        }
+
+                        /* TODO VIKRAM: tuple is ready here. Print the result or add to heapfile how ever you see fit.
+                        * */
+                    }
+                }
+            }
+            rangeQueryResultsScan.close();
+            rel2Scan.close();
+
+
         }
     }
 
@@ -569,6 +731,7 @@ public class DbmsEntry
         scan.closescan();
     }
 
+
     private static AttrType[] getRelationAttrTypes(String relName)
             throws
             IOException,
@@ -578,9 +741,12 @@ public class DbmsEntry
             Exception
     {
         Heapfile relMetaDataFile = new Heapfile(getRelMetaDataFilePath(currentOpenDb, relName));
-        FileScan relMetaDataScan = new FileScan(getRelMetaDataFilePath(currentOpenDb, relName),
-                new AttrType[]{new AttrType(AttrType.attrInteger)}, null, (short) 1, 1,
-                new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
+        AttrType[] attrTypes = new AttrType[]{new AttrType(AttrType.attrInteger)};
+        FldSpec[] projList = new FldSpec[attrTypes.length];
+        IntStream.range(0, projList.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
+
+        FileScan relMetaDataScan = new FileScan(getRelMetaDataFilePath(currentOpenDb, relName), attrTypes, new short[0], (short) attrTypes.length, attrTypes.length, projList, null);
+
 
         AttrType[] metadataAttrTypes = new AttrType[relMetaDataFile.getRecCnt()];
         Tuple t = relMetaDataScan.get_next();
@@ -593,6 +759,23 @@ public class DbmsEntry
         }
         relMetaDataScan.close();
         return metadataAttrTypes;
+    }
+    private static short[] getRelationStringLengths(AttrType[] attrType)
+    {
+        int count = 0;
+        for (int i = 0; i < attrType.length; i++)
+        {
+            if (attrType[i].attrType == AttrType.attrString)
+            {
+                count++;
+            }
+        }
+        short[] stringLengths = new short[count];
+        for (int i = 0; i < count; i++)
+        {
+            stringLengths[i] = MAX_STRING_LENGTH;
+        }
+        return stringLengths;
     }
 
     private static boolean indexExists(String relName, int columnId)
