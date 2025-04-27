@@ -58,6 +58,7 @@ public class DbmsEntryTest {
         testCreateNewDbCloseAndReopen();
         testBatchCreate();
         testCreateIndex();
+        testBTreeIndicesOnMultipleColumnsAndMultipleRelations();
         testQueries();
 
         System.out.println("All tests passed!");
@@ -398,6 +399,71 @@ public class DbmsEntryTest {
 
 //    TODO Vikram - Test multi column indices on lsh and btree after Meet's naming code fix
 
+    private static void testBTreeIndicesOnMultipleColumnsAndMultipleRelations() throws Exception {
+        String dbNameOne = "testDb";
+        String twentyFiveKRelation = "rel25";
+        String sampleData1Relation = "relSample1";
+
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", twentyFiveKRelation });
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt", sampleData1Relation });
+
+        final HashSet<Integer> twentyFiveKCol1 = new HashSet<>();
+        final HashSet<Float> twentyFiveKCol2 = new HashSet<>();
+        final HashSet<String> twentyFiveKCol3 = new HashSet<>();
+        BufferedReader fileReader = new BufferedReader(new FileReader("javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt"));
+        fileReader.readLine();
+        fileReader.readLine();
+        String line = fileReader.readLine();
+        while(line != null) {
+            twentyFiveKCol1.add(Integer.parseInt(line));
+            twentyFiveKCol2.add(Float.parseFloat(fileReader.readLine()));
+            twentyFiveKCol3.add(fileReader.readLine());
+            fileReader.readLine();
+            line = fileReader.readLine();
+        }
+
+        final HashSet<Float> sampleDataCol1 = new HashSet<>();
+        final HashSet<Float> sampleDataCol3 = new HashSet<>();
+        fileReader = new BufferedReader(new FileReader("javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt"));
+        fileReader.readLine();
+        fileReader.readLine();
+        line = fileReader.readLine();
+        while(line != null) {
+            sampleDataCol1.add(Float.parseFloat(line));
+            fileReader.readLine();
+            sampleDataCol3.add(Float.parseFloat(fileReader.readLine()));
+            fileReader.readLine();
+            line = fileReader.readLine();
+        }
+
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), twentyFiveKRelation, "1"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), twentyFiveKRelation, "2"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), twentyFiveKRelation, "3"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), sampleData1Relation, "1"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), sampleData1Relation, "3"});
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(twentyFiveKRelation, 1), twentyFiveKCol1, AttrType.attrInteger);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(twentyFiveKRelation, 2), twentyFiveKCol2, AttrType.attrReal);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(twentyFiveKRelation, 3), twentyFiveKCol3, AttrType.attrString);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(sampleData1Relation, 1), sampleDataCol1, AttrType.attrReal);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(sampleData1Relation, 3), sampleDataCol3, AttrType.attrReal);
+
+        DbmsEntry.handleDbCloseCommand();
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(twentyFiveKRelation, 1), twentyFiveKCol1, AttrType.attrInteger);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(twentyFiveKRelation, 2), twentyFiveKCol2, AttrType.attrReal);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(twentyFiveKRelation, 3), twentyFiveKCol3, AttrType.attrString);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(sampleData1Relation, 1), sampleDataCol1, AttrType.attrReal);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(sampleData1Relation, 3), sampleDataCol3, AttrType.attrReal);
+
+        DbmsEntry.handleDbCloseCommand();
+        System.out.println("PASS - testBTreeIndicesOnMultipleColumnsAndMultipleRelations\n\n");
+    }
+
     private static void testQueries() throws Exception {
         String dbName = "testDb";
         String relName = "rel1";
@@ -667,5 +733,27 @@ public class DbmsEntryTest {
                 System.setOut(consoleOut);
             }
         };
+    }
+
+    private static <T> void readFullBTreeAndCompare(String btreeFileName, HashSet<T> expectedSet, int attrType) throws Exception {
+        HashSet<T> keysFromTree = new HashSet<>();
+
+        BTreeFile bTreeFile = new BTreeFile(btreeFileName);
+        BTFileScan scan = bTreeFile.new_scan(null, null);
+        KeyDataEntry entry = scan.get_next();
+        while(entry != null) {
+            if(attrType == AttrType.attrInteger)
+                keysFromTree.add((T)(((IntegerKey)entry.key).getKey()));
+            else if(attrType == AttrType.attrReal)
+                keysFromTree.add((T)(((RealKey)entry.key).getKey()));
+            else
+                keysFromTree.add((T)(((StringKey)entry.key).getKey()));
+            entry = scan.get_next();
+        }
+        scan.DestroyBTreeFileScan();
+        bTreeFile.close();
+
+        if(keysFromTree.isEmpty() || (! keysFromTree.equals(expectedSet)))
+            throw new RuntimeException("FAIL - Mismatch between data in txt file and bTree!");
     }
 }
