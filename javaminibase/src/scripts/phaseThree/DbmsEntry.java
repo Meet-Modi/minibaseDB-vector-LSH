@@ -338,14 +338,13 @@ public class DbmsEntry {
                 e.printStackTrace();
                 return;
             }
+            System.out.println("BTree index created on column " + columnIdInt + " of relation " + relName);
         }
         else
         {
             // TODO : Handle scenario where the column is of type symbol or null.
             System.out.println("Index creation not supported for this type of column. Please use LSHF index for vector columns.");
-            return;
         }
-        System.out.println("BTree index created on column " + columnIdInt + " of relation " + relName);
     }
 
     public static void handleBatchInsertCommand(String[] commandParts) throws Exception 
@@ -663,7 +662,7 @@ public class DbmsEntry {
         scan.closescan();
     }
 
-    private static AttrType[] getRelationAttrTypes(String relName)
+    public static AttrType[] getRelationAttrTypes(String relName)
             throws
             IOException,
             FileScanException,

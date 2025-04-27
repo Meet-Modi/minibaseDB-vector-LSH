@@ -59,6 +59,7 @@ public class DbmsEntryTest {
         testBatchCreate();
         testCreateIndex();
         testBTreeIndicesOnMultipleColumnsAndMultipleRelations();
+        testLshIndicesOnMultipleColumnsAndMultipleRelations();
         testQueries();
 
         System.out.println("All tests passed!");
@@ -268,27 +269,7 @@ public class DbmsEntryTest {
         if (dataFile.getRecCnt() != 75000)
             throw new RuntimeException("FAIL - testCreateIndex - Data file record count mismatch after index create!");
 
-        Consumer<String> readFullBTreeIndex = (btreeFileName) -> {
-            HashSet<String> stringsFromBTree = new HashSet<>();
-            try {
-                BTreeFile bTreeFile = new BTreeFile(btreeFileName);
-                BTFileScan scan = bTreeFile.new_scan(null, null);
-                KeyDataEntry entry = scan.get_next();
-                while(entry != null) {
-                    stringsFromBTree.add(((StringKey)entry.key).getKey());
-                    entry = scan.get_next();
-                }
-                scan.DestroyBTreeFileScan();
-                bTreeFile.close();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-
-            if(stringsFromBTree.isEmpty() || (! stringsFromBTree.equals(STRINGS_IN_75000_DATASET)))
-                throw new RuntimeException("FAIL - testCreateIndex - Mismatch between data in txt file and bTree!");
-
-        };
-        readFullBTreeIndex.accept(DbmsEntry.getBTreeFileName(relNameOne, 3));
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(relNameOne, 3), STRINGS_IN_75000_DATASET, AttrType.attrString);
 
         Consumer<String> searchBTreeAndVerifyRecord = (btreeFileName) -> {
             try {
@@ -337,58 +318,19 @@ public class DbmsEntryTest {
         if (dataFile.getRecCnt() != 75000)
             throw new RuntimeException("FAIL - testCreateIndex - Data file record count mismatch after index create!");
 
-        Consumer<LSHFIndex> verifyLshIndexHasAllTuples = (lshfIndex) -> {
-            Function<String, Integer> getBinSize = (binName) -> {
-              try {
-                  return new Heapfile(binName).getRecCnt();
-              } catch (Exception e) {
-                  throw new RuntimeException(e);
-              }
-            };
-
-            HashSet<String> layer1UniqueBins = new HashSet<>();
-            HashSet<String> layer2UniqueBins = new HashSet<>();
-            try {
-                FileScan fileScan = new FileScan(dataFilePathFull,
-                        new AttrType[] { new AttrType(AttrType.attrInteger), new AttrType(AttrType.attrReal), new AttrType(AttrType.attrString), new AttrType(AttrType.attrVector100D) },
-                        new short[] {DbmsEntry.MAX_STRING_LENGTH},
-                        (short) 4,
-                        1,
-                        new FldSpec[] { new FldSpec(new RelSpec(RelSpec.outer), 4) },
-                        null);
-
-                Tuple outTuple = fileScan.get_next();
-
-                while (outTuple != null) {
-                    List<String> binNames = lshfIndex.getBinHeapFileNames(outTuple.get100DVectFld(1));
-                    layer1UniqueBins.add(binNames.get(0));
-                    layer2UniqueBins.add(binNames.get(1));
-
-                    outTuple = fileScan.get_next();
-                }
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-
-            int layer1RecordCount = layer1UniqueBins.stream().mapToInt(getBinSize::apply).sum();
-            int layer2RecordCount = layer2UniqueBins.stream().mapToInt(getBinSize::apply).sum();;
-            if((layer1RecordCount != 75_000) || (layer2RecordCount != 75_000))
-                throw new RuntimeException("FAIL - testCreateIndex - Record count mismatch between LSHFIndex and data heap file!");
-        };
-
         LSHFIndex lshfIndexBeforeDbClose = new LSHFIndex(relNameOne, 4);
-        verifyLshIndexHasAllTuples.accept(lshfIndexBeforeDbClose);
+        verifyLshIndexHasAllTuples(dataFilePathFull, DbmsEntry.getRelationAttrTypes(relNameOne), lshfIndexBeforeDbClose, 4);
 
         DbmsEntry.handleDbCloseCommand();
 
         // Reopen DB to check if files preserved
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
 
-        readFullBTreeIndex.accept(DbmsEntry.getBTreeFileName(relNameOne, 3));
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(relNameOne, 3), STRINGS_IN_75000_DATASET, AttrType.attrString);
         searchBTreeAndVerifyRecord.accept(DbmsEntry.getBTreeFileName(relNameOne, 3));
 
         LSHFIndex lshfIndexAfterDbClose = new LSHFIndex(relNameOne, 4);
-        verifyLshIndexHasAllTuples.accept(lshfIndexAfterDbClose);
+        verifyLshIndexHasAllTuples(dataFilePathFull, DbmsEntry.getRelationAttrTypes(relNameOne), lshfIndexAfterDbClose, 4);
 
         if(! lshfIndexAfterDbClose.equals(lshfIndexBeforeDbClose))
             throw new RuntimeException("FAIL - testCreateIndex - LSHIndices before and after close are not the same! Perhaps LSHF reinitialization from state/meta files isn't working.");
@@ -396,8 +338,6 @@ public class DbmsEntryTest {
         DbmsEntry.handleDbCloseCommand();
         System.out.println("PASS - testCreateIndex\n\n");
     }
-
-//    TODO Vikram - Test multi column indices on lsh and btree after Meet's naming code fix
 
     private static void testBTreeIndicesOnMultipleColumnsAndMultipleRelations() throws Exception {
         String dbNameOne = "testDb";
@@ -462,6 +402,51 @@ public class DbmsEntryTest {
 
         DbmsEntry.handleDbCloseCommand();
         System.out.println("PASS - testBTreeIndicesOnMultipleColumnsAndMultipleRelations\n\n");
+    }
+
+    private static void testLshIndicesOnMultipleColumnsAndMultipleRelations() throws Exception {
+        String dbNameOne = "testDb";
+        String sampleData1Relation = "relSample1";
+        String sampleData2Relation = "relSample2";
+
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt", sampleData1Relation });
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_2.txt", sampleData2Relation });
+
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), sampleData1Relation, "2", "2", "2"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), sampleData1Relation, "4", "2", "2"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), sampleData2Relation, "2", "2", "2"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), sampleData2Relation, "4", "2", "2"});
+        LSHFIndex indexSampleData1Col2BeforeRestart = new LSHFIndex(sampleData1Relation, 2);
+        LSHFIndex indexSampleData1Col4BeforeRestart = new LSHFIndex(sampleData1Relation, 4);
+        LSHFIndex indexSampleData2Col2BeforeRestart = new LSHFIndex(sampleData2Relation, 2);
+        LSHFIndex indexSampleData2Col4BeforeRestart = new LSHFIndex(sampleData2Relation, 4);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleData1Relation), DbmsEntry.getRelationAttrTypes(sampleData1Relation), indexSampleData1Col2BeforeRestart, 2);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleData1Relation), DbmsEntry.getRelationAttrTypes(sampleData1Relation), indexSampleData1Col4BeforeRestart, 4);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleData2Relation), DbmsEntry.getRelationAttrTypes(sampleData2Relation), indexSampleData2Col2BeforeRestart, 2);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleData2Relation), DbmsEntry.getRelationAttrTypes(sampleData2Relation), indexSampleData2Col4BeforeRestart, 4);
+
+        DbmsEntry.handleDbCloseCommand();
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+
+        LSHFIndex indexSampleData1Col2AfterRestart = new LSHFIndex(sampleData1Relation, 2);
+        LSHFIndex indexSampleData1Col4AfterRestart = new LSHFIndex(sampleData1Relation, 4);
+        LSHFIndex indexSampleData2Col2AfterRestart = new LSHFIndex(sampleData2Relation, 2);
+        LSHFIndex indexSampleData2Col4AfterRestart = new LSHFIndex(sampleData2Relation, 4);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleData1Relation), DbmsEntry.getRelationAttrTypes(sampleData1Relation), indexSampleData1Col2AfterRestart, 2);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleData1Relation), DbmsEntry.getRelationAttrTypes(sampleData1Relation), indexSampleData1Col4AfterRestart, 4);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleData2Relation), DbmsEntry.getRelationAttrTypes(sampleData2Relation), indexSampleData2Col2AfterRestart, 2);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleData2Relation), DbmsEntry.getRelationAttrTypes(sampleData2Relation), indexSampleData2Col4AfterRestart, 4);
+
+        if(! indexSampleData1Col2BeforeRestart.equals(indexSampleData1Col2AfterRestart) || ! indexSampleData1Col4BeforeRestart.equals(indexSampleData1Col4AfterRestart)
+            || ! indexSampleData2Col2BeforeRestart.equals(indexSampleData2Col2AfterRestart) || ! indexSampleData2Col4BeforeRestart.equals(indexSampleData2Col4AfterRestart))
+            throw new RuntimeException("FAIL - testLshIndicesOnMultipleColumnsAndMultipleRelations - LSHIndices before and after close are not the same! Perhaps LSHF reinitialization from state/meta files isn't working.");
+
+        DbmsEntry.handleDbCloseCommand();
+        System.out.println("PASS - testLshIndicesOnMultipleColumnsAndMultipleRelations\n\n");
     }
 
     private static void testQueries() throws Exception {
@@ -756,4 +741,42 @@ public class DbmsEntryTest {
         if(keysFromTree.isEmpty() || (! keysFromTree.equals(expectedSet)))
             throw new RuntimeException("FAIL - Mismatch between data in txt file and bTree!");
     }
+
+    private static void verifyLshIndexHasAllTuples(String dataFileName, AttrType[] attrTypes, LSHFIndex index, int colNum) throws Exception {
+        Function<String, Integer> getBinSize = (binName) -> {
+            try {
+                return new Heapfile(binName).getRecCnt();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        HashSet<String> layer1UniqueBins = new HashSet<>();
+        HashSet<String> layer2UniqueBins = new HashSet<>();
+
+        FileScan fileScan = new FileScan(dataFileName,
+                attrTypes,
+                TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes),
+                (short) attrTypes.length,
+                1,
+                new FldSpec[] { new FldSpec(new RelSpec(RelSpec.outer), colNum) },
+                null);
+
+        Tuple outTuple = fileScan.get_next();
+        while (outTuple != null) {
+            List<String> binNames = index.getBinHeapFileNames(outTuple.get100DVectFld(1));
+            layer1UniqueBins.add(binNames.get(0));
+            layer2UniqueBins.add(binNames.get(1));
+
+            outTuple = fileScan.get_next();
+        }
+
+        int layer1RecordCount = layer1UniqueBins.stream().mapToInt(getBinSize::apply).sum();
+        int layer2RecordCount = layer2UniqueBins.stream().mapToInt(getBinSize::apply).sum();;
+        int dataFileSize = new Heapfile(dataFileName).getRecCnt();
+
+        if((layer1RecordCount != dataFileSize) || (layer2RecordCount != dataFileSize))
+            throw new RuntimeException("FAIL - Record count mismatch between LSHFIndex and data heap file!");
+    }
+
 }
