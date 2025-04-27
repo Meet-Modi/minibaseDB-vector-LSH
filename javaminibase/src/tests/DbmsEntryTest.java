@@ -60,6 +60,7 @@ public class DbmsEntryTest {
         testCreateIndex();
         testBTreeIndicesOnMultipleColumnsAndMultipleRelations();
         testLshIndicesOnMultipleColumnsAndMultipleRelations();
+        testBatchInsert();
         testQueries();
 
         System.out.println("All tests passed!");
@@ -678,6 +679,66 @@ public class DbmsEntryTest {
         }
         //      Simulate a program re-launch by force restarting DB
         forceRestartDb.run();
+    }
+
+    private static void testBatchInsert() throws Exception {
+        String dbNameOne = "testDb";
+        String sampleDataRelation = "relSample";
+        String customDataRelation = "relCustom";
+
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt", sampleDataRelation });
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample10_000.txt", customDataRelation });
+
+        // Multiple LSH
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), sampleDataRelation, "2", "2", "2"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), sampleDataRelation, "4", "2", "2"});
+        // Multiple BTree
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), customDataRelation, "1"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), customDataRelation, "2"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), customDataRelation, "3"});
+
+        DbmsEntry.handleBatchInsertCommand(new String[] { SupportedCommands.BATCH_INSERT.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_2.txt", sampleDataRelation });
+        DbmsEntry.handleBatchInsertCommand(new String[] { SupportedCommands.BATCH_INSERT.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt", customDataRelation });
+
+        if((new Heapfile(DbmsEntry.getRelDataFileName(sampleDataRelation)).getRecCnt() != 748) || (new Heapfile(DbmsEntry.getRelDataFileName(customDataRelation)).getRecCnt() != 35_000))
+            throw new RuntimeException("FAIL - testBatchInsert - Invalid record counts after batch insert!");
+
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleDataRelation), DbmsEntry.getRelationAttrTypes(sampleDataRelation), new LSHFIndex(sampleDataRelation, 2), 2);
+        verifyLshIndexHasAllTuples(DbmsEntry.getRelDataFileName(sampleDataRelation), DbmsEntry.getRelationAttrTypes(sampleDataRelation), new LSHFIndex(sampleDataRelation, 4), 4);
+
+        final HashSet<Integer> col1 = new HashSet<>();
+        final HashSet<Float> col2 = new HashSet<>();
+        final HashSet<String> col3 = new HashSet<>();
+
+        Consumer<String> readIntoSets = (customSampleDataFilePath) -> {
+            try {
+                BufferedReader fileReader = new BufferedReader(new FileReader(customSampleDataFilePath));
+                fileReader.readLine();
+                fileReader.readLine();
+                String line = fileReader.readLine();
+                while (line != null) {
+                    col1.add(Integer.parseInt(line));
+                    col2.add(Float.parseFloat(fileReader.readLine()));
+                    col3.add(fileReader.readLine());
+                    fileReader.readLine();
+                    line = fileReader.readLine();
+                }
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+        readIntoSets.accept("javaminibase/src/tests/scriptTestDataFiles/sample10_000.txt");
+        readIntoSets.accept("javaminibase/src/tests/scriptTestDataFiles/sample25_000.txt");
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(customDataRelation, 1), col1, AttrType.attrInteger);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(customDataRelation, 2), col2, AttrType.attrReal);
+        readFullBTreeAndCompare(DbmsEntry.getBTreeFileName(customDataRelation, 3), col3, AttrType.attrString);
+
+        DbmsEntry.handleDbCloseCommand();
+        System.out.println("PASS - testBatchInsert\n\n");
     }
 
     private static String getDbPath(String dbName) {

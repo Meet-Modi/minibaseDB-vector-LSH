@@ -50,12 +50,13 @@ public class DbmsEntry {
     {
         DBMETADATA_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
     }
-    private static final short[] DBMETADATA_TUPLE_STRING_LENGTHS = new short[] { MAX_STRING_LENGTH };
     private static final FldSpec[] DBMETADATA_TUPLE_PROJ_LIST = new FldSpec[DBMETADATA_TUPLE_ATTR_TYPES.length];
     static
     {
         IntStream.range(0, DBMETADATA_TUPLE_PROJ_LIST.length).forEach(i -> DBMETADATA_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
     }
+
+    enum IndexType {LSHF, BTREE};
 
     public static void main(String[] args) throws Exception
     {
@@ -219,7 +220,7 @@ public class DbmsEntry {
         insertRelIntoDbMetaDataFile(relName);
         createRelMetaDataFile(relName, numAttributes, attributeTypes);
         createDataFile(relName);
-        batchInsertDataIntoRel(br, relName, numAttributes, attributeTypes);
+        batchInsertDataIntoRel(br, relName, numAttributes);
         br.close();
     }
 
@@ -293,7 +294,7 @@ public class DbmsEntry {
             {
                 LSHFIndex lshfIndex = new LSHFIndex(relName, numLayers, binLength, numHashes, columnIdInt);
                 populateLSHFIndexOnExistingRelColumn(lshfIndex, relName, columnIdInt);
-                insertIndexIntoDbMetaDataFile(relName, columnIdInt, "LSHF");
+                insertIndexIntoDbMetaDataFile(relName, columnIdInt, IndexType.LSHF.toString());
             }
             catch (Exception e)
             {
@@ -330,7 +331,7 @@ public class DbmsEntry {
             {
                 BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnIdInt), keyType, keySize, 1); // TODO : Full Delete for now
                 populateBTreeIndexOnExistingRelColumn(bTreeFile, relName, columnIdInt);
-                insertIndexIntoDbMetaDataFile(relName, columnIdInt, "Btree");
+                insertIndexIntoDbMetaDataFile(relName, columnIdInt, IndexType.BTREE.toString());
             }
             catch (Exception e)
             {
@@ -389,7 +390,8 @@ public class DbmsEntry {
         if (line == null)
         {
             br.close();
-            throw new Exception("Empty file");
+            System.out.println("Empty file");
+            return;
         }
 
         short numAttributes = Short.parseShort(line.trim());
@@ -397,15 +399,26 @@ public class DbmsEntry {
         if (line == null)
         {
             br.close();
-            throw new Exception("Attribute types missing");
+            System.out.println("Attribute types missing");
+            return;
         }
         String[] attributeTypes = line.split("\\s+");
         if (attributeTypes.length != numAttributes)
         {
             br.close();
-            throw new Exception("Attribute count and number of attribute types provided mismatch");
+            System.out.println("Attribute count and number of attribute types provided mismatch");
+            return;
         }
-        batchInsertDataIntoRel(br, relName, numAttributes, attributeTypes);
+
+        if(! Arrays.equals(
+                Arrays.stream(getRelationAttrTypes(relName)).mapToInt(t -> t.attrType).toArray(),
+                Arrays.stream(attributeTypes).mapToInt(s -> getMinibaseAttrTypeForInputAttrType(Integer.parseInt(s))).toArray()
+        )) {
+            System.out.println("Mismatch between attribute types in file and in relation");
+            return;
+        }
+
+        batchInsertDataIntoRel(br, relName, numAttributes);
         br.close();
     }
 
@@ -829,56 +842,26 @@ public class DbmsEntry {
         dbMetaDataFile.insertRecord(dbMetaDataTuple.getTupleByteArray());
     }
 
-    private static void batchInsertDataIntoRel(BufferedReader br, String relName, short numAttributes, String[] attributeTypes)
+    private static void batchInsertDataIntoRel(BufferedReader br, String relName, short numAttributes)
             throws
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            FieldNumberOutOfBoundException,
-            FileScanException,
-            TupleUtilsException,
-            InvalidRelation,
-            IOException,
             Exception
     {
-        short stringAttributeCount = 0;
+        AttrType[] metadataAttrTypes = getRelationAttrTypes(relName);
+        short[] stringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(metadataAttrTypes);
 
-        Heapfile relMetaDataFile = new Heapfile(getRelMetaDataFileName(relName));
-        FileScan relMetaDataScan = new FileScan(getRelMetaDataFileName(relName),
-                new AttrType[]{new AttrType(AttrType.attrInteger)}, null, (short) 1, 1,
-                new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
-
-        AttrType[] metadataAttrTypes = new AttrType[relMetaDataFile.getRecCnt()];
-        Tuple t = relMetaDataScan.get_next();
-        int i = 0;
-        while (t != null)
-        {
-            metadataAttrTypes[i] = new AttrType((t.getIntFld(1)));
-            if (metadataAttrTypes[i].attrType == AttrType.attrString)
-            {
-                stringAttributeCount++;
-            }
-            t = relMetaDataScan.get_next();
-            i++;
-        }
-        relMetaDataScan.close();
-
-        short[] stringLengths = new short[stringAttributeCount];
-        Arrays.fill(stringLengths, MAX_STRING_LENGTH);
-
-        t = new Tuple();
+        Tuple t = new Tuple();
         t.setHdr(numAttributes, metadataAttrTypes, stringLengths);
 
         Heapfile file = new Heapfile(getRelDataFileName(relName));
         String tupleValue;
         boolean endOfFile = false;
 
-        List<String[]> indexInfos = getAllRelationIndexInfos(currentOpenDb, relName);
+        List<String[]> indexInfos = getAllRelationIndexInfos(relName);
 
         while (true)
         {
             ArrayList<Vector100Dtype> vectorsInDataLine = new ArrayList<>();
-            for (i = 0; i < numAttributes; i++)
+            for (int i = 0; i < numAttributes; i++)
             {
                 tupleValue = br.readLine();
                 if (tupleValue == null)
@@ -929,7 +912,7 @@ public class DbmsEntry {
         for (String[] indexInfo : indexInfos) {
             int columnId = Integer.parseInt(indexInfo[0]);
             String indexType = indexInfo[1];
-            if (indexType.equals("Btree"))
+            if (indexType.equals(IndexType.BTREE.toString()))
             {
                 BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnId));
                 AttrType[] attrTypes = getRelationAttrTypes(relName);
@@ -952,7 +935,7 @@ public class DbmsEntry {
                 bTreeFile.insert(key, rid);
                 bTreeFile.close();
             }
-            else if (indexType.equals("LSHF")) 
+            else if (indexType.equals(IndexType.LSHF.toString()))
             {
                 LSHFIndex lshfIndex = new LSHFIndex(relName, columnId);
                 Vector100Dtype vector = t.get100DVectFld(columnId);
@@ -963,9 +946,9 @@ public class DbmsEntry {
     }
 
     // returns a list of index info for the relation
-    // example: [["1", "Btree"], ["2", "LSHF"]]
+    // example: [["1", "BTREE"], ["2", "LSHF"]]
     // where 1 is the column number and Btree is the index type
-    private static List<String[]> getAllRelationIndexInfos(String dbName, String relName) throws Exception
+    private static List<String[]> getAllRelationIndexInfos(String relName) throws Exception
     {   
         List<String[]> indexInfo = new ArrayList<>();
 
@@ -981,7 +964,7 @@ public class DbmsEntry {
             {
                 String indexString = tuple.getStrFld(1);
                 String[] parts = indexString.split("\\.");
-                indexInfo.add(new String[]{parts[2], parts[3]});
+                indexInfo.add(new String[]{parts[1], parts[2]});
             }
             tuple = dbMetaDataScan.get_next();
         }
@@ -1001,15 +984,7 @@ public class DbmsEntry {
 
     private static void createRelMetaDataFile(String relName, short numAttributes, String[] attributeTypes)
             throws
-            IOException,
-            InvalidTypeException,
-            InvalidTupleSizeException,
-            HFException,
-            HFBufMgrException,
-            HFDiskMgrException,
-            FieldNumberOutOfBoundException,
-            InvalidSlotNumberException,
-            SpaceNotAvailableException
+            Exception
     {
 
         AttrType[] attrTypes = new AttrType[numAttributes];
@@ -1020,28 +995,21 @@ public class DbmsEntry {
         Heapfile dataFileMetaData = new Heapfile(getRelMetaDataFileName(relName));
         for (int i = 0; i < numAttributes; i++)
         {
-            int type = Integer.parseInt(attributeTypes[i].trim());
-            switch (type)
-            {
-                case 1:
-                    type = 1; // integer
-                    break;
-                case 2:
-                    type = 2; // real
-                    break;
-                case 3:
-                    type = 0; // string
-                    break;
-                case 4:
-                    type = 5; // 100D-vector.
-                    break;
-                default:
-                    throw new IOException("Unknown attribute type" + type);
-            }
+            int type = getMinibaseAttrTypeForInputAttrType(Integer.parseInt(attributeTypes[i].trim()));
             attrTypes[i] = new AttrType(type);
             metaDataTuple.setIntFld(1, type);
             dataFileMetaData.insertRecord(metaDataTuple.getTupleByteArray());
         }
+    }
+
+    private static int getMinibaseAttrTypeForInputAttrType(int inType) {
+        return switch (inType) {
+            case 1 -> 1; // integer
+            case 2 -> 2; // real
+            case 3 -> 0; // string
+            case 4 -> 5; // 100D-vector.
+            default -> throw new RuntimeException("Unknown attribute type " + inType);
+        };
     }
 
     private static void createOrOpenDbMetaDataFile(String dbName)
