@@ -20,9 +20,7 @@ import heap.Tuple;
 import iterator.*;
 
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -485,7 +483,7 @@ public class DbmsEntry {
         }
 
         else if (querySpecification.startsWith("Filter("))
-        {
+          {
             int outputFieldNumbers[];
 
             String specifications = querySpecification.substring("Filter(".length(), querySpecification.length() - 1);
@@ -560,8 +558,76 @@ public class DbmsEntry {
             rangeQuery = rangeQuery.trim();
             rangeQuery = rangeQuery.substring(0, rangeQuery.length() - 1);
 
-            String distanceJoinRangeQuerySpecificationFile = rel1Name + rel2Name + "DJOIN";
+            // Range Query Specification
+            String rangeQuerySpecification = rangeQuery.substring("Range(".length(), rangeQuery.length() - 1);
+            String[] rangeQueryParameters = rangeQuerySpecification.split(",");
+
+            // Extract the rangeQueryParameters and only need rangeQueryVectorFieldNumber
+            int rangeQueryVectorFieldNumber = Integer.parseInt(rangeQueryParameters[0].trim());
+
+            // Write Range query to a file and call query handler.
+            String dJoinRangeQuerySpecificationFile = rel1Name+"DJOIN";
+            BufferedWriter writer = new BufferedWriter(new FileWriter(dJoinRangeQuerySpecificationFile));
+            writer.write(rangeQuery);
+            Query.queryHandler(currentOpenDb, dJoinRangeQuerySpecificationFile, numBuf, rel1Name);
+
+            // Extract Right relation information
+            String rel2Specification = br.readLine();
+            rel2Specification = rel2Specification.trim();
+            String[] parameters = rel2Specification.split(",");
+            int rel2FieldNumber = Integer.parseInt(parameters[0].trim());
+            int joinDistance = Integer.parseInt(parameters[1].trim());
+            String indexOption = parameters[2].trim();
+            int[] outputFieldNumbers = new int[parameters.length - 3];
+            for (int i = 3; i < parameters.length; i++)
+            {
+                outputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
+            }
+
             // Step 2: using results from step 1, join on relation 2.
+            /* TODO Vikram: Ensure range query results have the same tuple header as rel1
+                            In line calling Filescan on range query results define the file name that holds the
+                            query results.
+            *   */
+
+            // Define Filescan on range query results
+            AttrType[] rangeQueryAttrTypes = getRelationAttrTypes(rel1Name);
+            short[] rangeQueryStringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(rangeQueryAttrTypes);
+            FldSpec[] rangeQueryProjList = new FldSpec[rangeQueryAttrTypes.length];
+            IntStream.range(0, rangeQueryProjList.length).forEach(i -> rangeQueryProjList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
+            FileScan rangeQueryResultsScan = new FileScan(QUERY_RESULTS_HEAPFILE_NAME,rangeQueryAttrTypes,rangeQueryStringLengths, (short) rangeQueryAttrTypes.length, rangeQueryAttrTypes.length, rangeQueryProjList, null);
+
+            // Define filescan on outer relation
+            AttrType[] rel2AttrTypes = getRelationAttrTypes(rel2Name);
+            short[] rel2StringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(rel2AttrTypes);
+            FldSpec[] rel2ProjList = new FldSpec[rel2AttrTypes.length];
+            IntStream.range(0, rel2ProjList.length).forEach(i -> rel2ProjList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
+            FileScan rel2Scan = new FileScan(rel2Name, rel2AttrTypes, rel2StringLengths, (short) rel2AttrTypes.length, rel2AttrTypes.length, rel2ProjList, null);
+
+            // Perform join
+            Tuple rangeQueryTuple = rangeQueryResultsScan.get_next();
+            while(rangeQueryTuple != null)
+            {
+                Tuple rel2Tuple = rel2Scan.get_next();
+                while(rel2Tuple != null)
+                {
+
+                    AttrType fieldType = new AttrType(AttrType.attrVector100D);
+                    int vectorDistance = TupleUtils.CompareTupleWithTuple(fieldType,rangeQueryTuple, rangeQueryVectorFieldNumber, rel2Tuple, rel2FieldNumber);
+
+                    // Define result tuple fields
+                    if (vectorDistance <= joinDistance)
+                    {
+
+                        /* TODO VIKRAM: print rangeQueryTuple and rel2Tuple.
+                        * */
+                    }
+                }
+            }
+            rangeQueryResultsScan.close();
+            rel2Scan.close();
+
+
         }
 
         // Restart DB with old buffer count
@@ -634,7 +700,6 @@ public class DbmsEntry {
         FileScan relMetaDataScan = new FileScan(getRelMetaDataFileName(relName),
                 new AttrType[]{new AttrType(AttrType.attrInteger)}, null, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
-
         try {
             AttrType[] metadataAttrTypes = new AttrType[relMetaDataFile.getRecCnt()];
             Tuple t = relMetaDataScan.get_next();
