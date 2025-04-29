@@ -33,7 +33,7 @@ public class LSHFIndex
     private static final String LAYER_STATE_HEAPFILE_NAME = "LayerState";
     private static final String LAYER_METADATA_HEAPFILE_NAME = "LayerMetaData";
 
-    public static final String UNION_DUMP_HEAP_FILE_NAME = "unionDump";
+    public static final String UNION_DUMP_HEAP_FILE_NAME_SUFFIX = "unionDump";
     public static final String RID_DUMP_HEAP_FILE_NAME = "ridDump";
     public static final String CLEAN_RID_DUMP_HEAP_FILE_NAME = "cleanRidDump";
 
@@ -394,7 +394,7 @@ public class LSHFIndex
 
         // Create delete create again.
         // Clearing previous unionDump and starting fresh.
-        Heapfile unionDump = openDeleteAndOpenHeapFile(UNION_DUMP_HEAP_FILE_NAME);
+        Heapfile unionDump = openDeleteAndOpenHeapFile(getLshUnionDumpFileName(relationName));
 
         while (cleanRidTuple != null)
         {
@@ -442,6 +442,10 @@ public class LSHFIndex
     private static String getLSHFIndexLayerMetaDataFileName(String relName, int attributeColumnNumber)
     {
         return LAYER_METADATA_HEAPFILE_NAME + relName + attributeColumnNumber;
+    }
+
+    public static String getLshUnionDumpFileName(String relationName) {
+        return relationName + UNION_DUMP_HEAP_FILE_NAME_SUFFIX;
     }
 
 }

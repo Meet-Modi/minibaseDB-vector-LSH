@@ -61,6 +61,11 @@ public class Vector100Dtype
     }
 
     @Override
+    public int hashCode() {
+        return Arrays.hashCode(vector);
+    }
+
+    @Override
     public String toString() {
         return Arrays.toString(vector);
     }

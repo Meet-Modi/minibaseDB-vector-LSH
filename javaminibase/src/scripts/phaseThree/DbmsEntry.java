@@ -23,14 +23,14 @@ import iterator.*;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.stream.IntStream;
 
 import LSHFIndex.LSHFIndex;
+import iterator.Iterator;
 import scripts.Query;
+
+import javax.sound.midi.Soundbank;
 
 import static global.GlobalConst.NUMBUF;
 import static global.SystemDefs.JavabaseBM;
@@ -449,7 +449,6 @@ public class DbmsEntry {
             System.out.println(rel1Name + " relation does not exist. Please ensure it has been created before using it.");
             return;
         }
-        // TODO Divesh - Check if rel2Name exists (Similar to above) in DbMetadata for Joins, since that's the only operator that uses rel2
         if (rel2Name == null)
         {
             System.out.println("Relation 2 name is null. Please provide a valid relation name.");
@@ -518,7 +517,6 @@ public class DbmsEntry {
                 // TODO Divesh: Currently, btreeFile scan only works for integer and string.
                 //       Need to test for integers first. then extend functionality for other data types.
                 Heapfile dataFile = new Heapfile(getRelDataFileName(rel1Name));
-                Heapfile queryResult = new Heapfile(Query.QUERY_RESULTS_HEAPFILE_NAME);
                 KeyClass key = new IntegerKey(target_value);
                 BTreeFile bTreeIndexFile = new BTreeFile(getBTreeFileName(rel1Name, non_vector_field_number));
                 BTFileScan btScan = bTreeIndexFile.new_scan(key, key);
@@ -534,7 +532,7 @@ public class DbmsEntry {
                                 TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes));
 
                         TupleUtils.printFieldsFromTuple(resultTuple, attrTypes, outputFieldNumbers);
-                        queryResult.insertRecord(resultTuple.getTupleByteArray());
+                        System.out.println();
                         entry = btScan.get_next();
                     }
                 } finally {
@@ -550,84 +548,110 @@ public class DbmsEntry {
         }
         else if (querySpecification.startsWith("DJOIN("))
         {
+            if(! checkIfRelExistsInDbMetaDataFile(rel2Name))
+            {
+                System.out.println(rel2Name + " relation does not exist. Please ensure it has been created before using it.");
+                return;
+            }
 
-            // Extract Range Query
-            String rangeQuery = br.readLine();
+            // Outer and inner relation info
+            final AttrType[] outerAttrTypes = getRelationAttrTypes(rel1Name);
 
-            // remove spaces and trailling ,
-            rangeQuery = rangeQuery.trim();
-            rangeQuery = rangeQuery.substring(0, rangeQuery.length() - 1);
+            final AttrType[] innerAttrTypes = getRelationAttrTypes(rel2Name);
+            final short[] innerStringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(innerAttrTypes);
+            final FldSpec[] innerProjList = new FldSpec[innerAttrTypes.length];
+            IntStream.range(0, innerProjList.length).forEach(i -> innerProjList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
 
-            // Range Query Specification
-            String rangeQuerySpecification = rangeQuery.substring("Range(".length(), rangeQuery.length() - 1);
-            String[] rangeQueryParameters = rangeQuerySpecification.split(",");
+            // Extract Outer Query
+            String outerQuery = br.readLine();
+            outerQuery = outerQuery.trim();
+            outerQuery = outerQuery.substring(0, outerQuery.length() - 1);
+            String[] queryParts;
 
-            // Extract the rangeQueryParameters and only need rangeQueryVectorFieldNumber
-            int rangeQueryVectorFieldNumber = Integer.parseInt(rangeQueryParameters[0].trim());
-
-            // Write Range query to a file and call query handler.
-            String dJoinRangeQuerySpecificationFile = rel1Name+"DJOIN";
-            BufferedWriter writer = new BufferedWriter(new FileWriter(dJoinRangeQuerySpecificationFile));
-            writer.write(rangeQuery);
-            Query.queryHandler(currentOpenDb, dJoinRangeQuerySpecificationFile, numBuf, rel1Name);
-
-            // Extract Right relation information
+            // Extract inner relation query information
             String rel2Specification = br.readLine();
             rel2Specification = rel2Specification.trim();
             String[] parameters = rel2Specification.split(",");
             int rel2FieldNumber = Integer.parseInt(parameters[0].trim());
             int joinDistance = Integer.parseInt(parameters[1].trim());
-            String indexOption = parameters[2].trim();
-            int[] outputFieldNumbers = new int[parameters.length - 3];
+            boolean indexOption = parameters[2].trim().equals("Y");
+            int[] rel2OutputFieldNumbers = new int[parameters.length - 3];
             for (int i = 3; i < parameters.length; i++)
             {
-                outputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
+                rel2OutputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
             }
 
-            // Step 2: using results from step 1, join on relation 2.
-            /* TODO Vikram: Ensure range query results have the same tuple header as rel1
-                            In line calling Filescan on range query results define the file name that holds the
-                            query results.
-            *   */
-
-            // Define Filescan on range query results
-            AttrType[] rangeQueryAttrTypes = getRelationAttrTypes(rel1Name);
-            short[] rangeQueryStringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(rangeQueryAttrTypes);
-            FldSpec[] rangeQueryProjList = new FldSpec[rangeQueryAttrTypes.length];
-            IntStream.range(0, rangeQueryProjList.length).forEach(i -> rangeQueryProjList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
-            FileScan rangeQueryResultsScan = new FileScan(QUERY_RESULTS_HEAPFILE_NAME,rangeQueryAttrTypes,rangeQueryStringLengths, (short) rangeQueryAttrTypes.length, rangeQueryAttrTypes.length, rangeQueryProjList, null);
-
-            // Define filescan on outer relation
-            AttrType[] rel2AttrTypes = getRelationAttrTypes(rel2Name);
-            short[] rel2StringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(rel2AttrTypes);
-            FldSpec[] rel2ProjList = new FldSpec[rel2AttrTypes.length];
-            IntStream.range(0, rel2ProjList.length).forEach(i -> rel2ProjList[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
-            FileScan rel2Scan = new FileScan(rel2Name, rel2AttrTypes, rel2StringLengths, (short) rel2AttrTypes.length, rel2AttrTypes.length, rel2ProjList, null);
-
-            // Perform join
-            Tuple rangeQueryTuple = rangeQueryResultsScan.get_next();
-            while(rangeQueryTuple != null)
-            {
-                Tuple rel2Tuple = rel2Scan.get_next();
-                while(rel2Tuple != null)
-                {
-
-                    AttrType fieldType = new AttrType(AttrType.attrVector100D);
-                    int vectorDistance = TupleUtils.CompareTupleWithTuple(fieldType,rangeQueryTuple, rangeQueryVectorFieldNumber, rel2Tuple, rel2FieldNumber);
-
-                    // Define result tuple fields
-                    if (vectorDistance <= joinDistance)
-                    {
-
-                        /* TODO VIKRAM: print rangeQueryTuple and rel2Tuple.
-                        * */
-                    }
+            if(indexOption) {
+                if(innerAttrTypes[rel2FieldNumber - 1].attrType != AttrType.attrVector100D) {
+                    System.out.println("DJOIN query is not possible on a non-100D vector column.");
+                    return;
+                }
+                if(! DbmsEntry.checkIfIndexExistsInDbMetaDataFile(rel2Name, rel2FieldNumber)) {
+                    System.out.println("Index option is Y but index does not exist for relation = " + rel2Name + " on fieldNumber = " + rel2FieldNumber + ". Pls create an index before using it");
+                    return;
                 }
             }
-            rangeQueryResultsScan.close();
-            rel2Scan.close();
 
+            // Prepare outer Scan
+            Iterator outerScan;
+            if(outerQuery.startsWith("Range(")) {
+                queryParts = outerQuery.substring("Range(".length(), outerQuery.length() - 1).split(",");
 
+                Optional<Iterator> scanOptional = Query.validateAndPrepareRangeScan(outerQuery, rel1Name, outerAttrTypes, Integer.parseInt(numBuf), true);
+                if(scanOptional.isEmpty())
+                    return;
+                outerScan = scanOptional.get();
+            } else if (outerQuery.startsWith("NN(")) {
+                queryParts = outerQuery.substring("NN(".length(), outerQuery.length() - 1).split(",");
+
+                Optional<Iterator> scanOptional = Query.validateAndPrepareNNScan(outerQuery, rel1Name, outerAttrTypes, Integer.parseInt(numBuf), true);
+                if(scanOptional.isEmpty())
+                    return;
+                outerScan = scanOptional.get();
+            } else {
+                System.out.println("Invalid Outer relation scan. Pls use NN or Range");
+                return;
+            }
+            final int rel1FieldNumber = Integer.parseInt(queryParts[0]);
+            final int[] rel1OutputFieldNumbers = new int[queryParts.length - 4];
+            for (int i = 4; i < queryParts.length; i++)
+                rel1OutputFieldNumbers[i - 4] = Integer.parseInt(queryParts[i].trim());
+
+            // Perform join
+            FileScan innerScan = null;
+            try {
+                Tuple outerScanTuple = outerScan.get_next();
+                while (outerScanTuple != null) {
+                    if (indexOption) {
+                        new LSHFIndex(rel2Name, rel2FieldNumber).union(outerScanTuple.get100DVectFld(rel1FieldNumber), new Heapfile(getRelDataFileName(rel2Name)));
+                        innerScan = new FileScan(LSHFIndex.getLshUnionDumpFileName(rel2Name), innerAttrTypes, innerStringLengths, (short) innerAttrTypes.length, innerAttrTypes.length, innerProjList, null);
+                    } else {
+                        innerScan = new FileScan(getRelDataFileName(rel2Name), innerAttrTypes, innerStringLengths, (short) innerAttrTypes.length, innerAttrTypes.length, innerProjList, null);
+                    }
+
+                    Tuple innerScanTuple = innerScan.get_next();
+                    while (innerScanTuple != null) {
+                        innerScanTuple.setHdr((short) innerAttrTypes.length, innerAttrTypes, innerStringLengths);
+                        int vectorDistance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), outerScanTuple, rel1FieldNumber, innerScanTuple, rel2FieldNumber);
+
+                        // Define result tuple fields
+                        if (vectorDistance <= joinDistance) {
+                            System.out.println("-------------Outer Relation-------------");
+                            TupleUtils.printFieldsFromTuple(outerScanTuple, outerAttrTypes, rel1OutputFieldNumbers);
+                            System.out.println("-------------Inner Relation-------------");
+                            TupleUtils.printFieldsFromTuple(innerScanTuple, innerAttrTypes, rel2OutputFieldNumbers);
+                            System.out.println("----------------------------------------\n");
+                        }
+                        innerScanTuple = innerScan.get_next();
+                    }
+                    innerScan.close();
+                    outerScanTuple = outerScan.get_next();
+                }
+            } finally {
+                if(innerScan != null)
+                    innerScan.close();
+                outerScan.close();
+            }
         }
 
         // Restart DB with old buffer count

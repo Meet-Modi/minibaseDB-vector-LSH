@@ -73,12 +73,18 @@ public class NNIndexScan extends Iterator {
 
             FldSpec[] projlist= new FldSpec[numAttributes];
             IntStream.range(0, numAttributes).forEach(i -> projlist[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
-            unionFileScan = new FileScan(
-                    (lshfIndex != null) ? LSHFIndex.UNION_DUMP_HEAP_FILE_NAME : DbmsEntry.getRelDataFileName(relName),
-                    attrTypes, strLengths, numAttributes, numAttributes, projlist, null
-            );
+            try {
+                unionFileScan = new FileScan(
+                        (lshfIndex != null) ? LSHFIndex.getLshUnionDumpFileName(relName) : DbmsEntry.getRelDataFileName(relName),
+                        attrTypes, strLengths, numAttributes, numAttributes, projlist, null
+                );
 
-            sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, Query.numBuffersForSort, target, 0);
+                sort = new Sort(attrTypes, numAttributes, strLengths, unionFileScan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), 100, Query.numBuffersForSort, target, 0);
+            } catch (Exception e) {
+                unionFileScan.close();
+                sort.close();
+                throw e;
+            }
         }
 
         try {

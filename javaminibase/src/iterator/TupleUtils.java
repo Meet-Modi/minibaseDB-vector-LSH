@@ -442,7 +442,6 @@ public class TupleUtils
                     break;
             }
         }
-        System.out.println();
     }
 }
 

@@ -302,7 +302,7 @@ public class BatchInsertScriptTest {
                 throw new RuntimeException("FAIL - testIndexUnion - unionFile has more records than data file! UnionFileRecCount - " +
                         unionFile.getRecCnt() + " dataFileRecCount - " + totalRecordsInDataFile);
 
-            FileScan scan = new FileScan(LSHFIndex.UNION_DUMP_HEAP_FILE_NAME, attrTypes, string_lengths, num_attributes, num_attributes, projlist, null);
+            FileScan scan = null;
             Sort sort = new Sort(attrTypes, num_attributes, string_lengths, scan, vectorFieldNumber, new TupleOrder(TupleOrder.Ascending), VECTOR_lENGTH, 12, target, 0);
 
             Tuple t = sort.get_next();
