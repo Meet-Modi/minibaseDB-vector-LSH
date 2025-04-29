@@ -87,7 +87,9 @@ public class Query
     }
 
     // TODO Divesh - For output fields, handle '*'. It means all fields are to be in output.
-    public static void queryHandler(String querySpecificationFileName, String numBuf, String relName, AttrType[] relAttrTypes) throws Exception {
+    public static void queryHandler(String querySpecificationFileName, String numBuf, String relName, AttrType[] relAttrTypes) throws
+                                                                                                                               Exception
+    {
         String query_specification_file_name = querySpecificationFileName;
 
         int num_buffers = Integer.parseInt(numBuf);
@@ -111,15 +113,15 @@ public class Query
 
         if (query_specification.startsWith("Range("))
         {
-            Optional<Iterator> scanOptional = validateAndPrepareRangeScan(query_specification, relName, attrTypes, num_buffers, false);
-            if(scanOptional.isEmpty())
+            Optional<Iterator> scanOptional = validateAndPrepareRangeScan(query_specification, relName, attrTypes, num_buffers);
+            if (scanOptional.isEmpty())
                 return;
             scan = scanOptional.get();
         }
         else if (query_specification.startsWith("NN("))
         {
-            Optional<Iterator> scanOptional = validateAndPrepareNNScan(query_specification, relName, attrTypes, num_buffers, false);
-            if(scanOptional.isEmpty())
+            Optional<Iterator> scanOptional = validateAndPrepareNNScan(query_specification, relName, attrTypes, num_buffers);
+            if (scanOptional.isEmpty())
                 return;
             scan = scanOptional.get();
         }
@@ -133,15 +135,25 @@ public class Query
             String target_vector_file_name = parameters[1].trim();
             int distance = Integer.parseInt(parameters[2].trim());
 
-            if(attrTypes[vector_field_number - 1].attrType != AttrType.attrVector100D) {
+            if (attrTypes[vector_field_number - 1].attrType != AttrType.attrVector100D)
+            {
                 System.out.println("Sort query is not possible on a non-100D vector column.");
                 return;
             }
 
-            outputFieldNumbers = new int[parameters.length - 3];
-            for (int i = 3; i < parameters.length; i++)
+            // Identify output fields
+            if (parameters[3].trim().equals("*"))
             {
-                outputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
+                outputFieldNumbers = new int[attrTypes.length];
+                IntStream.range(0, attrTypes.length).forEach(i -> outputFieldNumbers[i] = i + 1);
+            }
+            else
+            {
+                outputFieldNumbers = new int[parameters.length - 3];
+                for (int i = 3; i < parameters.length; i++)
+                {
+                    outputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
+                }
             }
 
             // Extract the target vector from the target vector file
@@ -152,8 +164,9 @@ public class Query
             System.out.println("QA: " + vector_field_number + ", D: " + distance + ", target vector: " + Arrays.toString(target_vector.vector));
             System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
 
-            FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
-            IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
+            // Define projList
+            FldSpec[] projList = new FldSpec[attrTypes.length];
+            IntStream.range(0, attrTypes.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
 
             scan = new RSIndexScan(null, relName, relName, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, distance);
         }
@@ -168,21 +181,26 @@ public class Query
 //        Iterate over scan
         prepareOutputTupleAttrTypes();
 
-        try {
+        try
+        {
             Tuple t = scan.get_next();
             while (t != null)
             {
-                printOutputTuple(t);
+                TupleUtils.printFieldsFromTuple(t, attrTypes, outputFieldNumbers);
                 t = scan.get_next();
             }
-        } finally {
+        }
+        finally
+        {
             scan.close();
         }
 
         System.out.println("\n ---End Output---");
     }
 
-    public static Optional<Iterator> validateAndPrepareNNScan(String query_specification, String relName, AttrType[] attrTypes, int numBuf, boolean ignoreOutputFieldsInSpecificationAndGetAll) throws Exception {
+    public static Optional<Iterator> validateAndPrepareNNScan(String query_specification, String relName, AttrType[] attrTypes, int numBuf) throws
+                                                                                                                                                                                                Exception
+    {
         String specifications = query_specification.substring("NN(".length(), query_specification.length() - 1);
         String[] parameters = specifications.split(",");
         numBuffersForSort = numBuf / 4;
@@ -192,24 +210,36 @@ public class Query
         String target_vector_file_name = parameters[1].trim();
         int number_of_nearest_neighbors = Integer.parseInt(parameters[2].trim());
         String indexOption = parameters[3].trim();
-
-        if(attrTypes[vector_field_number - 1].attrType != AttrType.attrVector100D) {
+        if (attrTypes[vector_field_number - 1].attrType != AttrType.attrVector100D)
+        {
             System.out.println("NN query is not possible on a non-100D vector column.");
             return Optional.empty();
         }
-        if(indexOption.equals("Y") && ! DbmsEntry.checkIfIndexExistsInDbMetaDataFile(relName, vector_field_number)) {
+        if (indexOption.equals("Y") && !DbmsEntry.checkIfIndexExistsInDbMetaDataFile(relName, vector_field_number))
+        {
             System.out.println("Index option is Y but index does not exist for relation = " + relName + " on fieldNumber = " + vector_field_number + ". Pls create an index before using it");
             return Optional.empty();
         }
 
-        if(! ignoreOutputFieldsInSpecificationAndGetAll) {
+        // Define output fields
+        if (parameters[4].trim().equals("*"))
+        {
+            outputFieldNumbers = new int[attrTypes.length];
+
+        }
+
+        else
+        {
             outputFieldNumbers = new int[parameters.length - 4];
             for (int i = 4; i < parameters.length; i++)
+            {
                 outputFieldNumbers[i - 4] = Integer.parseInt(parameters[i].trim());
-        } else {
-            outputFieldNumbers = new int[attrTypes.length];
-            IntStream.range(0, attrTypes.length).forEach(i -> outputFieldNumbers[i] = i+1);
+            }
         }
+
+        int[] fieldNumbers = new int[attrTypes.length];
+        IntStream.range(0, attrTypes.length).forEach(i -> fieldNumbers[i] = i + 1);
+
 
         // Extract the target vector from the target vector file
         Vector100Dtype target_vector = read_target_vector(target_vector_file_name);
@@ -217,17 +247,19 @@ public class Query
         // Print the query details
         System.out.println("NN Query Parsed:");
         System.out.println("QA (vectorFieldNumber): " + vector_field_number + ", K: " + number_of_nearest_neighbors + ", target vector: " + Arrays.toString(target_vector.vector));
-        System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
+        System.out.println("Output fields: " + Arrays.toString(fieldNumbers));
 
-        FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
-        IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
+        FldSpec[] projList = new FldSpec[fieldNumbers.length];
+        IntStream.range(0, fieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), fieldNumbers[i]));
 
         return Optional.of(new NNIndexScan(
 //                    Choose to use LSHFIndex or not
-                indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null, relName, null, attrTypes, strLengths, attrTypes.length, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, number_of_nearest_neighbors));
+                indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null, relName, null, attrTypes, strLengths, attrTypes.length, fieldNumbers.length, projList, null, vector_field_number, target_vector, number_of_nearest_neighbors));
     }
 
-    public static Optional<Iterator> validateAndPrepareRangeScan(String query_specification, String relName, AttrType[] attrTypes, int numBuf, boolean ignoreOutputFieldsInSpecificationAndGetAll) throws Exception {
+    public static Optional<Iterator> validateAndPrepareRangeScan(String query_specification, String relName, AttrType[] attrTypes, int numBuf) throws
+                                                                                                                                                                                                   Exception
+    {
         String specifications = query_specification.substring("Range(".length(), query_specification.length() - 1);
         String[] parameters = specifications.split(",");
         numBuffersForSort = numBuf / 4;
@@ -238,23 +270,35 @@ public class Query
         int distance = Integer.parseInt(parameters[2].trim());
         String indexOption = parameters[3].trim();
 
-        if(attrTypes[vector_field_number - 1].attrType != AttrType.attrVector100D) {
+        if (attrTypes[vector_field_number - 1].attrType != AttrType.attrVector100D)
+        {
             System.out.println("Range query is not possible on a non-100D vector column.");
             return Optional.empty();
         }
-        if(indexOption.equals("Y") && ! DbmsEntry.checkIfIndexExistsInDbMetaDataFile(relName, vector_field_number)) {
+        if (indexOption.equals("Y") && !DbmsEntry.checkIfIndexExistsInDbMetaDataFile(relName, vector_field_number))
+        {
             System.out.println("Index option is Y but index does not exist for relation = " + relName + " on fieldNumber = " + vector_field_number + ". Pls create an index before using it");
             return Optional.empty();
         }
 
-        if(! ignoreOutputFieldsInSpecificationAndGetAll) {
+        // Define output fields
+        if (parameters[4].trim().equals("*"))
+        {
+            outputFieldNumbers = new int[attrTypes.length];
+            IntStream.range(0, attrTypes.length).forEach(i -> outputFieldNumbers[i] = i + 1);
+        }
+        else
+        {
             outputFieldNumbers = new int[parameters.length - 4];
             for (int i = 4; i < parameters.length; i++)
+            {
                 outputFieldNumbers[i - 4] = Integer.parseInt(parameters[i].trim());
-        } else {
-            outputFieldNumbers = new int[attrTypes.length];
-            IntStream.range(0, attrTypes.length).forEach(i -> outputFieldNumbers[i] = i+1);
+            }
         }
+
+        int[] fieldNumbers = new int[attrTypes.length];
+        IntStream.range(0, attrTypes.length).forEach(i -> fieldNumbers[i] = i + 1);
+
 
         // Extract the target vector from the target vector file
         Vector100Dtype target_vector = read_target_vector(target_vector_file_name);
@@ -262,14 +306,14 @@ public class Query
         // Print the query details
         System.out.println("Range Query Parsed:");
         System.out.println("QA: " + vector_field_number + ", D: " + distance + ", target vector: " + Arrays.toString(target_vector.vector));
-        System.out.println("Output fields: " + Arrays.toString(outputFieldNumbers));
+        System.out.println("Output fields: " + Arrays.toString(fieldNumbers));
 
-        FldSpec[] projList = new FldSpec[outputFieldNumbers.length];
-        IntStream.range(0, outputFieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), outputFieldNumbers[i]));
+        FldSpec[] projList = new FldSpec[fieldNumbers.length];
+        IntStream.range(0, fieldNumbers.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), fieldNumbers[i]));
 
         return Optional.of(new RSIndexScan(
 //                    Choose to use LSHFIndex or not
-                indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null, relName, null, attrTypes, strLengths, attrTypes.length, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, distance));
+                indexOption.equals("Y") ? new IndexType(IndexType.Lsh) : null, relName, null, attrTypes, strLengths, attrTypes.length, fieldNumbers.length, projList, null, vector_field_number, target_vector, distance));
     }
 
 }

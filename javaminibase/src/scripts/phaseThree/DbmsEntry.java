@@ -2,10 +2,7 @@ package scripts.phaseThree;
 
 import btree.*;
 import diskmgr.Pcounter;
-import global.AttrType;
-import global.RID;
-import global.SystemDefs;
-import global.Vector100Dtype;
+import global.*;
 import heap.FieldNumberOutOfBoundException;
 import heap.HFBufMgrException;
 import heap.HFDiskMgrException;
@@ -35,7 +32,8 @@ import javax.sound.midi.Soundbank;
 import static global.GlobalConst.NUMBUF;
 import static global.SystemDefs.JavabaseBM;
 
-public class DbmsEntry {
+public class DbmsEntry
+{
     public static final int DB_SIZE_IN_PAGES = NUMBUF * 10;
     public static final short MAX_STRING_LENGTH = 64;
     public static final String DB_METADATA_FILE_NAME = "db.metadata";
@@ -44,19 +42,26 @@ public class DbmsEntry {
 
     // DBMETADATA attribute definitions
     private static final AttrType[] DBMETADATA_TUPLE_ATTR_TYPES = new AttrType[1];
+
     static
     {
         DBMETADATA_TUPLE_ATTR_TYPES[0] = new AttrType(AttrType.attrInteger);
     }
+
     private static final FldSpec[] DBMETADATA_TUPLE_PROJ_LIST = new FldSpec[DBMETADATA_TUPLE_ATTR_TYPES.length];
+
     static
     {
         IntStream.range(0, DBMETADATA_TUPLE_PROJ_LIST.length).forEach(i -> DBMETADATA_TUPLE_PROJ_LIST[i] = new FldSpec(new RelSpec(RelSpec.outer), i + 1));
     }
 
-    enum IndexType {LSHF, BTREE};
+    enum IndexType
+    {LSHF, BTREE}
 
-    public static void main(String[] args) throws Exception
+    ;
+
+    public static void main(String[] args) throws
+                                           Exception
     {
         while (true)
         {
@@ -82,20 +87,32 @@ public class DbmsEntry {
             }
 
             // TODO Vikram - Run a no-index range scan with max buf. This is to handle the unknown error when low numbuf passed later
-            try {
-                if (commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand())) {
+            try
+            {
+                if (commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand()))
+                {
                     handleBatchCreateCommand(commandParts);
-                } else if (commandParts[0].equals(SupportedCommands.CREATE_INDEX.getCommand())) {
+                }
+                else if (commandParts[0].equals(SupportedCommands.CREATE_INDEX.getCommand()))
+                {
                     handleIndexCreateCommand(commandParts);
-                } else if (commandParts[0].equals(SupportedCommands.BATCH_INSERT.getCommand())) {
+                }
+                else if (commandParts[0].equals(SupportedCommands.BATCH_INSERT.getCommand()))
+                {
                     handleBatchInsertCommand(commandParts);
-                } else if (commandParts[0].equals(SupportedCommands.QUERY.getCommand())) {
+                }
+                else if (commandParts[0].equals(SupportedCommands.QUERY.getCommand()))
+                {
                     handleQueryCommand(commandParts);
-                } else {
+                }
+                else
+                {
                     System.out.println("Unrecognized command. Quitting...");
                     break;
                 }
-            } finally {
+            }
+            finally
+            {
                 SystemDefs.JavabaseBM.flushAllPages();
             }
             Pcounter.printPcounter();
@@ -105,7 +122,9 @@ public class DbmsEntry {
         System.out.println("Quitting...");
     }
 
-    public static void handleDbOpenCommand(String[] commandParts) throws Exception {
+    public static void handleDbOpenCommand(String[] commandParts) throws
+                                                                  Exception
+    {
         handleDbOpenCommand(commandParts, DB_SIZE_IN_PAGES);
     }
 
@@ -346,9 +365,11 @@ public class DbmsEntry {
         }
     }
 
-    public static void handleBatchInsertCommand(String[] commandParts) throws Exception 
+    public static void handleBatchInsertCommand(String[] commandParts) throws
+                                                                       Exception
     {
-        if (currentOpenDb == null) {
+        if (currentOpenDb == null)
+        {
             System.out.println("No DB open currently. Please open a new db first.");
             return;
         }
@@ -356,28 +377,34 @@ public class DbmsEntry {
         String dataFilePath = commandParts[1];
         String relName = commandParts[2];
 
-        if (commandParts.length != 3 || !commandParts[0].equals(SupportedCommands.BATCH_INSERT.getCommand())) {
+        if (commandParts.length != 3 || !commandParts[0].equals(SupportedCommands.BATCH_INSERT.getCommand()))
+        {
             System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_INSERT.getUsage());
             return;
         }
 
-        if (dataFilePath == null || relName == null) {
+        if (dataFilePath == null || relName == null)
+        {
             System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_INSERT.getUsage());
             return;
         }
 
-        if (!Files.exists(Paths.get(dataFilePath))) {
+        if (!Files.exists(Paths.get(dataFilePath)))
+        {
             System.out.println("Data file " + dataFilePath + " does not exist.");
             return;
         }
 
-        try {
-            if(!relExists(relName)) {
+        try
+        {
+            if (!relExists(relName))
+            {
                 System.out.println("Relation " + relName + " does not exist. Please create it first.");
                 return;
             }
         }
-        catch (Exception e) {
+        catch (Exception e)
+        {
             System.out.println("Error checking relation: " + e.getMessage());
             e.printStackTrace();
             return;
@@ -408,10 +435,11 @@ public class DbmsEntry {
             return;
         }
 
-        if(! Arrays.equals(
+        if (!Arrays.equals(
                 Arrays.stream(getRelationAttrTypes(relName)).mapToInt(t -> t.attrType).toArray(),
                 Arrays.stream(attributeTypes).mapToInt(s -> getMinibaseAttrTypeForInputAttrType(Integer.parseInt(s))).toArray()
-        )) {
+        ))
+        {
             System.out.println("Mismatch between attribute types in file and in relation");
             return;
         }
@@ -444,7 +472,7 @@ public class DbmsEntry {
             System.out.println("Relation 1 name is null. Please provide a valid relation name.");
             return;
         }
-        if(! checkIfRelExistsInDbMetaDataFile(rel1Name))
+        if (!checkIfRelExistsInDbMetaDataFile(rel1Name))
         {
             System.out.println(rel1Name + " relation does not exist. Please ensure it has been created before using it.");
             return;
@@ -473,58 +501,94 @@ public class DbmsEntry {
         // Restart DB with numbuf
         final String CLOSED_DB_NAME = currentOpenDb;
         handleDbCloseCommand();
-        handleDbOpenCommand(new String[] {SupportedCommands.OPEN_DB.getCommand(), CLOSED_DB_NAME}, Integer.parseInt(numBuf));
+        handleDbOpenCommand(new String[]{SupportedCommands.OPEN_DB.getCommand(), CLOSED_DB_NAME}, Integer.parseInt(numBuf));
 
         // Query specification handling
-        if ( querySpecification.startsWith("Sort(") || querySpecification.startsWith("Range(") || querySpecification.startsWith("NN("))
+        if (querySpecification.startsWith("Sort(") || querySpecification.startsWith("Range(") || querySpecification.startsWith("NN("))
         {
             Query.queryHandler(querySpecificaionFile, numBuf, rel1Name, getRelationAttrTypes(rel1Name));
         }
 
         else if (querySpecification.startsWith("Filter("))
-          {
-            int outputFieldNumbers[];
+        {
+            int[] outputFieldNumbers;
 
             String specifications = querySpecification.substring("Filter(".length(), querySpecification.length() - 1);
             String[] parameters = specifications.split(",");
 
             // Extract the parameters from the query specification.
             int non_vector_field_number = Integer.parseInt(parameters[0].trim());
-            int target_value = Integer.parseInt(parameters[1].trim());
-            // TODO Divesh - Use the k value
-            String k_value = parameters[2].trim();
+            String target_value = parameters[1].trim();
+            int k_value = Integer.parseInt(parameters[2].trim());
             String indexOption = parameters[3].trim();
 
-            if(indexOption.equals("Y") && ! DbmsEntry.checkIfIndexExistsInDbMetaDataFile(rel1Name, non_vector_field_number)) {
+            if (indexOption.equals("Y") && !DbmsEntry.checkIfIndexExistsInDbMetaDataFile(rel1Name, non_vector_field_number))
+            {
                 System.out.println("Index option is Y but index does not exist for relation = " + rel1Name + " on fieldNumber = " + non_vector_field_number + ". Pls create an index before using it");
                 return;
             }
 
             AttrType[] attrTypes = getRelationAttrTypes(rel1Name);
-            if(attrTypes[non_vector_field_number - 1].attrType == AttrType.attrVector100D) {
+            if (attrTypes[non_vector_field_number - 1].attrType == AttrType.attrVector100D)
+            {
                 System.out.println("Filter query is not possible on a 100D vector column.");
                 return;
             }
 
-            outputFieldNumbers = new int[parameters.length - 4];
-            for (int i = 4; i < parameters.length; i++)
+            // Define filter field type
+            AttrType filterFieldType = new AttrType(attrTypes[non_vector_field_number-1].attrType);
+
+            // Define output fields
+            if (parameters[4].trim().equals("*"))
             {
-                outputFieldNumbers[i - 4] = Integer.parseInt(parameters[i].trim());
+                outputFieldNumbers = new int[attrTypes.length];
+                IntStream.range(0, attrTypes.length).forEach(i -> outputFieldNumbers[i] = i + 1);
+            }
+            else
+            {
+                outputFieldNumbers = new int[parameters.length - 4];
+                for (int i = 4; i < parameters.length; i++)
+                {
+                    outputFieldNumbers[i - 4] = Integer.parseInt(parameters[i].trim());
+                }
             }
 
             if (indexOption.equals("Y"))
             {
-                // TODO Divesh: Currently, btreeFile scan only works for integer and string.
-                //       Need to test for integers first. then extend functionality for other data types.
+
                 Heapfile dataFile = new Heapfile(getRelDataFileName(rel1Name));
-                KeyClass key = new IntegerKey(target_value);
+                KeyClass key;
+
+                // Convert target value to its type and define the KeyClass
+                if (filterFieldType.attrType == AttrType.attrInteger)
+                {
+                    key = new IntegerKey(Integer.parseInt(target_value));
+                }
+                else if (filterFieldType.attrType == AttrType.attrString)
+                {
+                    key = new StringKey(target_value);
+                }
+                else if (filterFieldType.attrType == AttrType.attrReal)
+                {
+                    key = new RealKey(Float.parseFloat(target_value));
+                }
+                else
+                {
+                    System.out.println("Unsupported filter field type: " + filterFieldType.attrType);
+                    return;
+                }
+
+                //
                 BTreeFile bTreeIndexFile = new BTreeFile(getBTreeFileName(rel1Name, non_vector_field_number));
                 BTFileScan btScan = bTreeIndexFile.new_scan(key, key);
-                try {
+                try
+                {
                     System.out.println("\n ---Output Tuples---");
 
                     KeyDataEntry entry = btScan.get_next();
-                    while (entry != null) {
+                    int iterator = 0;
+                    while (entry != null && iterator < k_value)
+                    {
                         Tuple resultTuple = dataFile.getRecord(((LeafData) entry.data).getData());
                         resultTuple.setHdr(
                                 (short) attrTypes.length,
@@ -534,8 +598,11 @@ public class DbmsEntry {
                         TupleUtils.printFieldsFromTuple(resultTuple, attrTypes, outputFieldNumbers);
                         System.out.println();
                         entry = btScan.get_next();
+                        iterator++;
                     }
-                } finally {
+                }
+                finally
+                {
                     btScan.DestroyBTreeFileScan();
                     bTreeIndexFile.close();
                 }
@@ -543,12 +610,66 @@ public class DbmsEntry {
             }
             else
             {
-                // use normal file scan
+
+                // Define the filter expression for filescan
+                CondExpr[] filter = new CondExpr[1];
+                filter[0] = new CondExpr();
+                filter[0].op = new AttrOperator(AttrOperator.aopEQ);
+                filter[0].type1 = new AttrType(AttrType.attrSymbol);
+                filter[0].type2 = new AttrType(AttrType.attrString);
+                filter[0].operand1.symbol = new FldSpec(new RelSpec(RelSpec.outer), non_vector_field_number);
+
+                // Identify operand2(Target value) fieldType
+                if (filterFieldType.attrType == AttrType.attrInteger)
+                {
+                    filter[0].operand2.integer = Integer.parseInt(target_value);
+                }
+                else if (filterFieldType.attrType == AttrType.attrString)
+                {
+                    filter[0].operand2.string = target_value;
+                }
+                else if (filterFieldType.attrType == AttrType.attrReal)
+                {
+                    filter[0].operand2.real =Float.parseFloat(target_value);
+                }
+                else
+                {
+                    System.out.println("Unsupported filter field type: " + filterFieldType.attrType);
+                    return;
+                }
+                filter[0].next = null;
+
+                // Define projList
+                FldSpec[] projList = new FldSpec[attrTypes.length];
+                IntStream.range(0, attrTypes.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
+
+                // Define fileScan
+                FileScan scan = new FileScan(
+                        getRelDataFileName(rel1Name),
+                        attrTypes,
+                        TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes),
+                        (short) attrTypes.length, outputFieldNumbers.length,
+                        projList,
+                        filter
+                );
+
+                Tuple t = scan.get_next();
+                int iterator = 0;
+                System.out.println("\n ---Output Tuples---");
+                while (t != null && iterator < k_value)
+                {
+                    TupleUtils.printFieldsFromTuple(t, attrTypes, outputFieldNumbers);
+                    System.out.println();
+                    t = scan.get_next();
+                    iterator++;
+                }
+                scan.close();
             }
         }
         else if (querySpecification.startsWith("DJOIN("))
         {
-            if(! checkIfRelExistsInDbMetaDataFile(rel2Name))
+            /* TODO handle * output fields*/
+            if (!checkIfRelExistsInDbMetaDataFile(rel2Name))
             {
                 System.out.println(rel2Name + " relation does not exist. Please ensure it has been created before using it.");
                 return;
@@ -556,7 +677,6 @@ public class DbmsEntry {
 
             // Outer and inner relation info
             final AttrType[] outerAttrTypes = getRelationAttrTypes(rel1Name);
-
             final AttrType[] innerAttrTypes = getRelationAttrTypes(rel2Name);
             final short[] innerStringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(innerAttrTypes);
             final FldSpec[] innerProjList = new FldSpec[innerAttrTypes.length];
@@ -575,18 +695,30 @@ public class DbmsEntry {
             int rel2FieldNumber = Integer.parseInt(parameters[0].trim());
             int joinDistance = Integer.parseInt(parameters[1].trim());
             boolean indexOption = parameters[2].trim().equals("Y");
-            int[] rel2OutputFieldNumbers = new int[parameters.length - 3];
-            for (int i = 3; i < parameters.length; i++)
+            int[] rel2OutputFieldNumbers;
+            if (parameters[3].trim().equals("*"))
             {
-                rel2OutputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
+                rel2OutputFieldNumbers = new int[innerAttrTypes.length];
+                IntStream.range(0, innerAttrTypes.length).forEach(i -> rel2OutputFieldNumbers[i] = i + 1);
+            }
+            else
+            {
+                rel2OutputFieldNumbers = new int[parameters.length - 3];
+                for (int i = 3; i < parameters.length; i++)
+                {
+                    rel2OutputFieldNumbers[i - 3] = Integer.parseInt(parameters[i].trim());
+                }
             }
 
-            if(indexOption) {
-                if(innerAttrTypes[rel2FieldNumber - 1].attrType != AttrType.attrVector100D) {
+            if (indexOption)
+            {
+                if (innerAttrTypes[rel2FieldNumber - 1].attrType != AttrType.attrVector100D)
+                {
                     System.out.println("DJOIN query is not possible on a non-100D vector column.");
                     return;
                 }
-                if(! DbmsEntry.checkIfIndexExistsInDbMetaDataFile(rel2Name, rel2FieldNumber)) {
+                if (!DbmsEntry.checkIfIndexExistsInDbMetaDataFile(rel2Name, rel2FieldNumber))
+                {
                     System.out.println("Index option is Y but index does not exist for relation = " + rel2Name + " on fieldNumber = " + rel2FieldNumber + ". Pls create an index before using it");
                     return;
                 }
@@ -594,48 +726,74 @@ public class DbmsEntry {
 
             // Prepare outer Scan
             Iterator outerScan;
-            if(outerQuery.startsWith("Range(")) {
+            if (outerQuery.startsWith("Range("))
+            {
                 queryParts = outerQuery.substring("Range(".length(), outerQuery.length() - 1).split(",");
 
-                Optional<Iterator> scanOptional = Query.validateAndPrepareRangeScan(outerQuery, rel1Name, outerAttrTypes, Integer.parseInt(numBuf), true);
-                if(scanOptional.isEmpty())
+                Optional<Iterator> scanOptional = Query.validateAndPrepareRangeScan(outerQuery, rel1Name, outerAttrTypes, Integer.parseInt(numBuf));
+                if (scanOptional.isEmpty())
                     return;
                 outerScan = scanOptional.get();
-            } else if (outerQuery.startsWith("NN(")) {
+            }
+            else if (outerQuery.startsWith("NN("))
+            {
                 queryParts = outerQuery.substring("NN(".length(), outerQuery.length() - 1).split(",");
 
-                Optional<Iterator> scanOptional = Query.validateAndPrepareNNScan(outerQuery, rel1Name, outerAttrTypes, Integer.parseInt(numBuf), true);
-                if(scanOptional.isEmpty())
+                Optional<Iterator> scanOptional = Query.validateAndPrepareNNScan(outerQuery, rel1Name, outerAttrTypes, Integer.parseInt(numBuf));
+                if (scanOptional.isEmpty())
                     return;
                 outerScan = scanOptional.get();
-            } else {
+            }
+            else
+            {
                 System.out.println("Invalid Outer relation scan. Pls use NN or Range");
                 return;
             }
+
             final int rel1FieldNumber = Integer.parseInt(queryParts[0]);
-            final int[] rel1OutputFieldNumbers = new int[queryParts.length - 4];
-            for (int i = 4; i < queryParts.length; i++)
-                rel1OutputFieldNumbers[i - 4] = Integer.parseInt(queryParts[i].trim());
+            int[] rel1OutputFieldNumbers;
+
+            if (queryParts[4].trim().equals("*"))
+            {
+                rel1OutputFieldNumbers = new int[outerAttrTypes.length];
+                for (int i = 0; i < outerAttrTypes.length; i++)
+                    rel1OutputFieldNumbers[i] = i + 1;
+
+            }
+            else
+            {
+                rel1OutputFieldNumbers = new int[queryParts.length - 4];
+                for (int i = 4; i < queryParts.length; i++)
+                    rel1OutputFieldNumbers[i - 4] = Integer.parseInt(queryParts[i].trim());
+            }
+
 
             // Perform join
             FileScan innerScan = null;
-            try {
+            try
+            {
                 Tuple outerScanTuple = outerScan.get_next();
-                while (outerScanTuple != null) {
-                    if (indexOption) {
+                while (outerScanTuple != null)
+                {
+                    if (indexOption)
+                    {
                         new LSHFIndex(rel2Name, rel2FieldNumber).union(outerScanTuple.get100DVectFld(rel1FieldNumber), new Heapfile(getRelDataFileName(rel2Name)));
                         innerScan = new FileScan(LSHFIndex.getLshUnionDumpFileName(rel2Name), innerAttrTypes, innerStringLengths, (short) innerAttrTypes.length, innerAttrTypes.length, innerProjList, null);
-                    } else {
+                    }
+                    else
+                    {
                         innerScan = new FileScan(getRelDataFileName(rel2Name), innerAttrTypes, innerStringLengths, (short) innerAttrTypes.length, innerAttrTypes.length, innerProjList, null);
                     }
 
                     Tuple innerScanTuple = innerScan.get_next();
-                    while (innerScanTuple != null) {
+                    while (innerScanTuple != null)
+                    {
                         innerScanTuple.setHdr((short) innerAttrTypes.length, innerAttrTypes, innerStringLengths);
                         int vectorDistance = TupleUtils.CompareTupleWithTuple(new AttrType(AttrType.attrVector100D), outerScanTuple, rel1FieldNumber, innerScanTuple, rel2FieldNumber);
 
                         // Define result tuple fields
-                        if (vectorDistance <= joinDistance) {
+                        if (vectorDistance <= joinDistance)
+                        {
                             System.out.println("-------------Outer Relation-------------");
                             TupleUtils.printFieldsFromTuple(outerScanTuple, outerAttrTypes, rel1OutputFieldNumbers);
                             System.out.println("-------------Inner Relation-------------");
@@ -647,8 +805,10 @@ public class DbmsEntry {
                     innerScan.close();
                     outerScanTuple = outerScan.get_next();
                 }
-            } finally {
-                if(innerScan != null)
+            }
+            finally
+            {
+                if (innerScan != null)
                     innerScan.close();
                 outerScan.close();
             }
@@ -656,7 +816,7 @@ public class DbmsEntry {
 
         // Restart DB with old buffer count
         handleDbCloseCommand();
-        handleDbOpenCommand(new String[] {SupportedCommands.OPEN_DB.getCommand(), CLOSED_DB_NAME});
+        handleDbOpenCommand(new String[]{SupportedCommands.OPEN_DB.getCommand(), CLOSED_DB_NAME});
     }
 
     // Helper methods
@@ -666,28 +826,39 @@ public class DbmsEntry {
     {
         Heapfile heapfile = new Heapfile(getRelDataFileName(relName));
         Scan scan = heapfile.openScan();
-        try {
+        try
+        {
             RID rid = new RID();
             Tuple tuple = new Tuple();
 
             AttrType[] attrTypes = getRelationAttrTypes(relName);
             short[] stringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes);
 
-            while ((tuple = scan.getNext(rid)) != null) {
+            while ((tuple = scan.getNext(rid)) != null)
+            {
                 tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
                 KeyClass key = null;
-                if (attrTypes[columnId - 1].attrType == AttrType.attrString) {
+                if (attrTypes[columnId - 1].attrType == AttrType.attrString)
+                {
                     key = new StringKey(tuple.getStrFld(columnId));
-                } else if (attrTypes[columnId - 1].attrType == AttrType.attrInteger) {
+                }
+                else if (attrTypes[columnId - 1].attrType == AttrType.attrInteger)
+                {
                     key = new IntegerKey(tuple.getIntFld(columnId));
-                } else if (attrTypes[columnId - 1].attrType == AttrType.attrReal) {
+                }
+                else if (attrTypes[columnId - 1].attrType == AttrType.attrReal)
+                {
                     key = new RealKey(tuple.getFloFld(columnId));
-                } else {
+                }
+                else
+                {
                     throw new IOException("Unknown attribute type" + attrTypes[columnId].attrType);
                 }
                 bTreeFile.insert(key, rid);
             }
-        } finally {
+        }
+        finally
+        {
             scan.closescan();
             bTreeFile.close();
         }
@@ -700,18 +871,22 @@ public class DbmsEntry {
 
         Heapfile heapfile = new Heapfile(getRelDataFileName(relName));
         Scan scan = heapfile.openScan();
-        try {
+        try
+        {
             RID rid = new RID();
             Tuple tuple = new Tuple();
 
             AttrType[] attrTypes = getRelationAttrTypes(relName);
             short[] stringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes);
 
-            while ((tuple = scan.getNext(rid)) != null) {
+            while ((tuple = scan.getNext(rid)) != null)
+            {
                 tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
                 lshfIndex.insertRecord(tuple.get100DVectFld(columnId), rid);
             }
-        } finally {
+        }
+        finally
+        {
             scan.closescan();
         }
     }
@@ -724,17 +899,21 @@ public class DbmsEntry {
         FileScan relMetaDataScan = new FileScan(getRelMetaDataFileName(relName),
                 new AttrType[]{new AttrType(AttrType.attrInteger)}, null, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
-        try {
+        try
+        {
             AttrType[] metadataAttrTypes = new AttrType[relMetaDataFile.getRecCnt()];
             Tuple t = relMetaDataScan.get_next();
             int i = 0;
-            while (t != null) {
+            while (t != null)
+            {
                 metadataAttrTypes[i] = new AttrType((t.getIntFld(1)));
                 t = relMetaDataScan.get_next();
                 i++;
             }
             return metadataAttrTypes;
-        } finally {
+        }
+        finally
+        {
             relMetaDataScan.close();
         }
     }
@@ -781,16 +960,21 @@ public class DbmsEntry {
                 new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
-        try {
+        try
+        {
             Tuple t = dbMetaDataScan.get_next();
-            while (t != null) {
-                if (t.getStrFld(1).startsWith("index:" + relName + "." + columnId)) {
+            while (t != null)
+            {
+                if (t.getStrFld(1).startsWith("index:" + relName + "." + columnId))
+                {
                     return true;
                 }
                 t = dbMetaDataScan.get_next();
             }
             return false;
-        } finally {
+        }
+        finally
+        {
             dbMetaDataScan.close();
         }
     }
@@ -808,16 +992,21 @@ public class DbmsEntry {
                 new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1,
                 new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
-        try {
+        try
+        {
             Tuple t = dbMetaDataScan.get_next();
-            while (t != null) {
-                if (t.getStrFld(1).equals("relation:" + relName)) {
+            while (t != null)
+            {
+                if (t.getStrFld(1).equals("relation:" + relName))
+                {
                     return true;
                 }
                 t = dbMetaDataScan.get_next();
             }
             return false;
-        } finally {
+        }
+        finally
+        {
             dbMetaDataScan.close();
         }
     }
@@ -917,18 +1106,23 @@ public class DbmsEntry {
         System.out.println("File " + getRelDataFileName(relName) + " created with " + file.getRecCnt() + " records.");
     }
 
-    private static void updateIndexesOnInsert(String relName, List<String[]> indexInfos, Tuple t, RID rid) throws Exception {    
-        for (String[] indexInfo : indexInfos) {
+    private static void updateIndexesOnInsert(String relName, List<String[]> indexInfos, Tuple t, RID rid) throws
+                                                                                                           Exception
+    {
+        for (String[] indexInfo : indexInfos)
+        {
             int columnId = Integer.parseInt(indexInfo[0]);
             String indexType = indexInfo[1];
             if (indexType.equals(IndexType.BTREE.toString()))
             {
                 BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnId));
-                try {
+                try
+                {
                     AttrType[] attrTypes = getRelationAttrTypes(relName);
                     KeyClass key;
 
-                    switch (attrTypes[columnId - 1].attrType) {
+                    switch (attrTypes[columnId - 1].attrType)
+                    {
                         case AttrType.attrString:
                             key = new StringKey(t.getStrFld(columnId));
                             break;
@@ -942,7 +1136,9 @@ public class DbmsEntry {
                             throw new IOException("Unsupported attribute type for BTree index: " + attrTypes[columnId - 1].attrType);
                     }
                     bTreeFile.insert(key, rid);
-                } finally {
+                }
+                finally
+                {
                     bTreeFile.close();
                 }
             }
@@ -959,26 +1155,32 @@ public class DbmsEntry {
     // returns a list of index info for the relation
     // example: [["1", "BTREE"], ["2", "LSHF"]]
     // where 1 is the column number and Btree is the index type
-    private static List<String[]> getAllRelationIndexInfos(String relName) throws Exception
-    {   
+    private static List<String[]> getAllRelationIndexInfos(String relName) throws
+                                                                           Exception
+    {
         List<String[]> indexInfo = new ArrayList<>();
 
         short[] stringLengths = new short[1];
         stringLengths[0] = MAX_STRING_LENGTH;
         FileScan dbMetaDataScan = new FileScan(DB_METADATA_FILE_NAME, new AttrType[]{new AttrType(AttrType.attrString)}, stringLengths, (short) 1, 1, new FldSpec[]{new FldSpec(new RelSpec(RelSpec.outer), 1)}, null);
 
-        try {
+        try
+        {
             Tuple tuple = dbMetaDataScan.get_next();
 
-            while (tuple != null) {
-                if (tuple.getStrFld(1).startsWith("index:" + relName)) {
+            while (tuple != null)
+            {
+                if (tuple.getStrFld(1).startsWith("index:" + relName))
+                {
                     String indexString = tuple.getStrFld(1);
                     String[] parts = indexString.split("\\.");
                     indexInfo.add(new String[]{parts[1], parts[2]});
                 }
                 tuple = dbMetaDataScan.get_next();
             }
-        } finally {
+        }
+        finally
+        {
             dbMetaDataScan.close();
         }
         return indexInfo;
@@ -1011,8 +1213,10 @@ public class DbmsEntry {
         }
     }
 
-    private static int getMinibaseAttrTypeForInputAttrType(int inType) {
-        return switch (inType) {
+    private static int getMinibaseAttrTypeForInputAttrType(int inType)
+    {
+        return switch (inType)
+        {
             case 1 -> 1; // integer
             case 2 -> 2; // real
             case 3 -> 0; // string
