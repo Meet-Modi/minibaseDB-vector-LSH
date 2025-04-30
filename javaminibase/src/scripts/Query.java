@@ -86,7 +86,6 @@ public class Query
         return target_vector;
     }
 
-    // TODO Divesh - For output fields, handle '*'. It means all fields are to be in output.
     public static void queryHandler(String querySpecificationFileName, String numBuf, String relName, AttrType[] relAttrTypes) throws
                                                                                                                                Exception
     {
@@ -168,7 +167,7 @@ public class Query
             FldSpec[] projList = new FldSpec[attrTypes.length];
             IntStream.range(0, attrTypes.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
 
-            scan = new RSIndexScan(null, relName, relName, attrTypes, strLengths, numAttributes, outputFieldNumbers.length, projList, null, vector_field_number, target_vector, distance);
+            scan = new RSIndexScan(null, relName, relName, attrTypes, strLengths, numAttributes, numAttributes, projList, null, vector_field_number, target_vector, distance);
         }
         else
         {
@@ -204,6 +203,7 @@ public class Query
         String specifications = query_specification.substring("NN(".length(), query_specification.length() - 1);
         String[] parameters = specifications.split(",");
         numBuffersForSort = numBuf / 4;
+        strLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes);
 
         // Extract the parameters from the query specification.
         int vector_field_number = Integer.parseInt(parameters[0].trim());
@@ -225,9 +225,7 @@ public class Query
         if (parameters[4].trim().equals("*"))
         {
             outputFieldNumbers = new int[attrTypes.length];
-
         }
-
         else
         {
             outputFieldNumbers = new int[parameters.length - 4];
@@ -263,6 +261,7 @@ public class Query
         String specifications = query_specification.substring("Range(".length(), query_specification.length() - 1);
         String[] parameters = specifications.split(",");
         numBuffersForSort = numBuf / 4;
+        strLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes);
 
         // Extract the parameters from the query specification.
         int vector_field_number = Integer.parseInt(parameters[0].trim());

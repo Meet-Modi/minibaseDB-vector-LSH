@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -63,6 +64,7 @@ public class DbmsEntryTest {
         testBatchInsert();
         testQueries();
         testDistanceJoin();
+        testQueriesWithLowBuffers();
 
         System.out.println("All tests passed!");
     }
@@ -761,7 +763,7 @@ public class DbmsEntryTest {
         // Invalid rel2 Name
         createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
                 "RANGE(2, "+ TARGET_VECTOR_FILE_PATH +", 70000, Y, 1, 2),\n" +
-                "2, 50000, Y");
+                "2, 50000, Y, 1, 2");
         DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), outerRelation, "invalidRelName", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
 
         // No index on rel2 column
@@ -771,7 +773,7 @@ public class DbmsEntryTest {
         cleanupTestInputFiles();
         createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
                 "RANGE(2, "+ TARGET_VECTOR_FILE_PATH +", 70000, Y, 1, 2),\n" +
-                "1, 50000, Y");
+                "1, 50000, Y, 1, 2");
         DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), outerRelation, innerRelation, QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
 
         DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), outerRelation, "2", "2", "2"});
@@ -866,6 +868,119 @@ public class DbmsEntryTest {
 
         DbmsEntry.handleDbCloseCommand();
         System.out.println("PASS - testDistanceJoin\n\n");
+    }
+
+    private static void testQueriesWithLowBuffers() throws Exception {
+        String dbNameOne = "testDb";
+        String relNameOne = "rel1";
+        String relNameTwo = "rel2";
+
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+        createFileForTestInput(TARGET_VECTOR_FILE_PATH, TARGET_VECTOR);
+
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample10_000.txt", relNameOne });
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt", relNameTwo });
+
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relNameOne, "1", "2", "2"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relNameTwo, "2", "2", "2"});
+
+        final int[] numBuf = new int[] {1};
+        BiConsumer<Callable<Void>, int[]> runWithNumBuf = (test, numBufs) -> {
+            // Queries that should fail due to low numBuf
+            for(int i : numBufs) {
+                numBuf[0] = i;
+                try {
+                    test.call();
+                } catch (Exception e) {
+                    try {
+                        DbmsEntry.handleDbCloseCommand();
+                        DbmsEntry.handleDbOpenCommand(new String[]{SupportedCommands.OPEN_DB.getCommand(), dbNameOne});
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                    continue;
+                }
+                throw new RuntimeException("FAIL - lowBufferTests - Exception expected due to low numBuf but none thrown!");
+            }
+
+            // A query with high numBuf should pass after failed queries
+            numBuf[0] = DbmsEntry.DB_SIZE_IN_PAGES;
+            try {
+                test.call();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        // Range
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Range(4, " + TARGET_VECTOR_FILE_PATH + ", 70000, N, 1, 2, 3, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        // NN
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"NN(4, " + TARGET_VECTOR_FILE_PATH + ", 5, N, 1, 2, 3, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        // Sort
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Sort(4, " + TARGET_VECTOR_FILE_PATH + ", 70000, 1, 2, 3, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        // Filter
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 5, 10, Y, 2, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1});
+
+        // DJoin
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
+                "NN(4, "+ TARGET_VECTOR_FILE_PATH +", 1, N, 1, 2),\n" +
+                "2, 55000, Y, 1, 2");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, relNameTwo, QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+
+        // Add more records to relations
+        DbmsEntry.handleBatchInsertCommand(new String[] { SupportedCommands.BATCH_INSERT.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample10_000.txt", relNameOne });
+        DbmsEntry.handleBatchInsertCommand(new String[] { SupportedCommands.BATCH_INSERT.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt", relNameTwo });
+
+        // Tests should still work. Test some.
+        // NN
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"NN(4, " + TARGET_VECTOR_FILE_PATH + ", 5, N, 1, 2, 3, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        // DJoin
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
+                "NN(4, "+ TARGET_VECTOR_FILE_PATH +", 1, N, 1, 2),\n" +
+                "2, 55000, Y, 1, 2");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, relNameTwo, QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        DbmsEntry.handleDbCloseCommand();
+        System.out.println("PASS - testQueriesWithLowBuffers\n\n");
     }
 
     private static String getDbPath(String dbName) {

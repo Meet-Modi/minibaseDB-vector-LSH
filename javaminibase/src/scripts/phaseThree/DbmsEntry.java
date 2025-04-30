@@ -86,11 +86,8 @@ public class DbmsEntry
                 continue;
             }
 
-            // TODO Vikram - Run a no-index range scan with max buf. This is to handle the unknown error when low numbuf passed later
-            try
-            {
-                if (commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand()))
-                {
+            try {
+                if (commandParts[0].equals(SupportedCommands.BATCH_CREATE.getCommand())) {
                     handleBatchCreateCommand(commandParts);
                 }
                 else if (commandParts[0].equals(SupportedCommands.CREATE_INDEX.getCommand()))
@@ -239,10 +236,11 @@ public class DbmsEntry
         createDataFile(relName);
         batchInsertDataIntoRel(br, relName, numAttributes);
         br.close();
+
+        runSafetyNNQuery(relName, getRelationAttrTypes(relName));
     }
 
-    public static void handleIndexCreateCommand(String[] commandParts)
-    {
+    public static void handleIndexCreateCommand(String[] commandParts) {
         String relName = commandParts[1];
         String columnId = commandParts[2];
 
@@ -360,7 +358,6 @@ public class DbmsEntry
         }
         else
         {
-            // TODO : Handle scenario where the column is of type symbol or null.
             System.out.println("Index creation not supported for this type of column. Please use LSHF index for vector columns.");
         }
     }
@@ -446,6 +443,8 @@ public class DbmsEntry
 
         batchInsertDataIntoRel(br, relName, numAttributes);
         br.close();
+
+        runSafetyNNQuery(relName, getRelationAttrTypes(relName));
     }
 
     public static void handleQueryCommand(String[] commandParts) throws
@@ -668,7 +667,6 @@ public class DbmsEntry
         }
         else if (querySpecification.startsWith("DJOIN("))
         {
-            /* TODO handle * output fields*/
             if (!checkIfRelExistsInDbMetaDataFile(rel2Name))
             {
                 System.out.println(rel2Name + " relation does not exist. Please ensure it has been created before using it.");
@@ -758,7 +756,6 @@ public class DbmsEntry
                 rel1OutputFieldNumbers = new int[outerAttrTypes.length];
                 for (int i = 0; i < outerAttrTypes.length; i++)
                     rel1OutputFieldNumbers[i] = i + 1;
-
             }
             else
             {
@@ -1243,5 +1240,43 @@ public class DbmsEntry
     public static String getRelMetaDataFileName(String relName)
     {
         return relName + ".metadata";
+    }
+
+//        This is an intermittent exception that occurs only when the allotted buffers are low in Query.java. The exception causes an irregular
+//        termination and since Query.java flushes all pages, future runs are never successful as the tempFile directory page gets corrupt. This
+//        causes all future calls to Sort to fail
+//
+//        However running a no-index query successfully (Allot a high number of buffers) seems to not cause this Exception to arise in future
+//        runs. I am not sure why the Exception is raised and why this suppresses it
+    private static void runSafetyNNQuery(String relName, AttrType[] attrTypes) throws Exception {
+        Integer vectorFieldNumber = null;
+        for(int i = 0; i < attrTypes.length; i++) {
+            if(attrTypes[i].attrType == AttrType.attrVector100D) {
+                vectorFieldNumber = i+1;
+                break;
+            }
+        }
+        // No vector fields => Only Filter() can be used on this relation. Filter doesn't call Sort.java, so the bug cannot arise. Safe, no need to run safety NN Query.
+        if(vectorFieldNumber == null)
+            return;
+        System.out.println("Running Safety NN Query...");
+
+        final String TARGET_VECTOR_FILE_PATH = getDbPath("safetyNNTargetVector.txt");
+        File file = new File(TARGET_VECTOR_FILE_PATH);
+        BufferedWriter writer = new BufferedWriter(new FileWriter(file));
+        writer.write("100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100");
+        writer.close();
+
+        Iterator scan = Query.validateAndPrepareNNScan("NN(" + vectorFieldNumber + "," + TARGET_VECTOR_FILE_PATH + ", 5, N, " + vectorFieldNumber + ")",
+                relName, attrTypes, DB_SIZE_IN_PAGES).get();
+
+        Tuple outTuple = scan.get_next();
+        while(outTuple != null)
+            outTuple = scan.get_next();
+        scan.close();
+
+        Files.deleteIfExists(Paths.get(TARGET_VECTOR_FILE_PATH));
+
+        System.out.println("Safety NN Query Complete");
     }
 }
