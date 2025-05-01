@@ -6,6 +6,7 @@ import heap.*;
 import iterator.*;
 import scripts.Query;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -411,6 +412,30 @@ public class LSHFIndex
         return unionDump;
     }
 
+    public void deleteRecord(Vector100Dtype vector, RID rid) throws Exception 
+    {
+        String[] hashValues = getAllLayersHash(vector);
+        for (int layer = 0; layer < hashValues.length; layer++)
+        {
+            String hashValue = hashValues[layer];
+            Heapfile heapFile = new Heapfile(generateBinHeapFileName(relationName, layer, attributeColumnNumber, hashValue));
+            FileScan binScan = new FileScan(generateBinHeapFileName(relationName, layer, attributeColumnNumber, hashValue), BIN_TUPLE_ATTR_TYPES, new short[0], (short) BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_ATTR_TYPES.length, BIN_TUPLE_PROJ_LIST, null);
+            Tuple binTuple = binScan.get_next();
+            while (binTuple != null)
+            {
+                int pageNo = binTuple.getIntFld(1);
+                int slotNo = binTuple.getIntFld(2);
+                RID currentRID = new RID(new PageId(pageNo), slotNo);
+                if (currentRID.equals(rid))
+                {
+                    heapFile.deleteRecord(currentRID);
+                    break;
+                }
+                binTuple = binScan.get_next();
+            }
+            binScan.close();
+        }
+    }
 
     @Override
     public boolean equals(Object obj)

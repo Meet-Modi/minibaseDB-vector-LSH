@@ -29,6 +29,8 @@ import scripts.Query;
 
 import javax.sound.midi.Soundbank;
 
+import org.w3c.dom.Attr;
+
 import static global.GlobalConst.NUMBUF;
 import static global.SystemDefs.JavabaseBM;
 
@@ -448,6 +450,90 @@ public class DbmsEntry
         br.close();
     }
 
+    public static void handleBatchDeleteCommand(String[] commandParts) throws Exception
+    {
+        if(currentOpenDb == null)
+        {
+            System.out.println("No DB open currently. Please open a new db first.");
+            return;
+        }
+
+        String dataFilePath = commandParts[1];
+        String relName = commandParts[2];
+
+        if (commandParts.length != 3 || !commandParts[0].equals(SupportedCommands.BATCH_DELETE.getCommand()))
+        {
+            System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_DELETE.getUsage());
+            return;
+        }
+
+        if (dataFilePath == null || relName == null)
+        {
+            System.out.println("Incorrect usage. Correct usage = " + SupportedCommands.BATCH_DELETE.getUsage());
+            return;
+        }
+
+        if (!Files.exists(Paths.get(dataFilePath)))
+        {
+            System.out.println("Data file " + dataFilePath + " does not exist.");
+            return;
+        }
+
+        try
+        {
+            if (!relExists(relName))
+            {
+                System.out.println("Relation " + relName + " does not exist. Please create it first.");
+                return;
+            }
+        }
+        catch (Exception e)
+        {
+            System.out.println("Error checking relation: " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
+
+        BufferedReader br = new BufferedReader(new FileReader(dataFilePath));
+        String line = br.readLine();
+        if (line == null)
+        {
+            br.close();
+            System.out.println("Empty file");
+            return;
+        }
+
+        short numAttributes = Short.parseShort(line.trim());
+        line = br.readLine();
+
+        if (line == null)
+        {
+            br.close();
+            System.out.println("Attribute types missing");
+            return;
+        }
+
+        String[] attributeTypes = line.split("\\s+");
+        if (attributeTypes.length != numAttributes)
+        {
+            br.close();
+            System.out.println("Attribute count and number of attribute types provided mismatch");
+            return;
+        }
+
+        if (!Arrays.equals(
+                Arrays.stream(getRelationAttrTypes(relName)).mapToInt(t -> t.attrType).toArray(),
+                Arrays.stream(attributeTypes).mapToInt(s -> getMinibaseAttrTypeForInputAttrType(Integer.parseInt(s))).toArray()
+        ))
+        {
+            System.out.println("Mismatch between attribute types in file and in relation");
+            return;
+        }
+
+        batchDeleteDataFromRel(br, relName);
+        br.close();
+    }
+    
     public static void handleQueryCommand(String[] commandParts) throws
                                                                  Exception
     {
@@ -820,6 +906,163 @@ public class DbmsEntry
     }
 
     // Helper methods
+    private static void batchDeleteDataFromRel(BufferedReader br, String relName) throws Exception
+    {
+        // Query Map{
+        //     attrNum : {
+        //         attrType : new ArrayList<>(){"1", "2", "3"}
+        //     }
+        // }
+        AttrType[] attrTypes = getRelationAttrTypes(relName);
+        HashMap<Integer, HashMap<AttrType, ArrayList<String>>> queryHashMap = new HashMap<>();
+        ArrayList<Integer> BTIndexColumns = new ArrayList<>();
+        ArrayList<Integer> LSHFIndexColumns = new ArrayList<>();
+        ArrayList<LSHFIndex> LSHFIndexList = new ArrayList<>();
+        String line = br.readLine();
+        if (line == null)
+        {
+            br.close();
+            throw new Exception("Empty file");
+        }
+
+        while(line != null){
+            String[] queryParts = line.split("\\s+", 2);
+            int attributeNum = Integer.parseInt(queryParts[0].trim());
+            String attributeValue = handleDeleteQueryAttrValue(queryParts[1].trim(), attrTypes[attributeNum - 1]);
+            if (queryHashMap.containsKey(attributeNum))
+            {
+                queryHashMap.get(attributeNum).get(attrTypes[attributeNum - 1]).add(attributeValue);
+            } else {
+                queryHashMap.put(attributeNum, new HashMap<>());
+                queryHashMap.get(attributeNum).put(attrTypes[attributeNum - 1], new ArrayList<>(Arrays.asList(attributeValue)));
+                if (indexExists(relName, attributeNum))
+                {
+                    if (attrTypes[attributeNum - 1].attrType == AttrType.attrVector100D) {
+                        LSHFIndexColumns.add(attributeNum); 
+                        LSHFIndexList.add(new LSHFIndex(relName, attributeNum));
+                    } else {
+                        BTIndexColumns.add(attributeNum);
+                    }
+                }              
+            }
+            line = br.readLine();
+        }
+
+        System.out.println("Deleting records from relation " + relName + " based on the following conditions:");
+        Heapfile relHeapFile = new Heapfile(getRelDataFileName(relName));
+        // Deletion logic. First search if Btree index exists for the attributeColumns. find all the RIDs and then delete them from the heapfile. Might save some page reads.
+        // If no index exists, then do a full table scan and delete the records.
+        while(BTIndexColumns.size() > 0){
+            int columnId = BTIndexColumns.get(0);
+            BTreeFile bTreeFile = new BTreeFile(getBTreeFileName(relName, columnId));
+            KeyClass key = null;
+            AttrType attrType = queryHashMap.get(columnId).keySet().iterator().next();
+            switch (attrType.attrType){ 
+                case AttrType.attrInteger:
+                    key = new IntegerKey(Integer.parseInt(queryHashMap.get(columnId).get(attrType).get(0)));
+                    queryHashMap.get(columnId).get(attrType).remove(0);
+                    break;
+                case AttrType.attrString:  
+                    key = new StringKey(queryHashMap.get(columnId).get(attrType).get(0));
+                    queryHashMap.get(columnId).get(attrType).remove(0);
+                    break;
+                case AttrType.attrReal:
+                    key = new RealKey(Float.parseFloat(queryHashMap.get(columnId).get(attrType).get(0)));
+                    queryHashMap.get(columnId).get(attrType).remove(0);
+                    break;
+                default:
+                    throw new Exception("Unsupported attribute type: " + queryHashMap.get(columnId).get("attrType").get(0));
+            }
+            if(queryHashMap.get(columnId).get(attrType).size() == 0){
+                BTIndexColumns.remove(0);
+                queryHashMap.remove(columnId);
+            }
+            BTFileScan bTreeFileScan = bTreeFile.new_scan(key, key);
+            KeyDataEntry entry = bTreeFileScan.get_next();
+            while(entry != null){
+                RID rid = ((LeafData) entry.data).getData();
+                entry = bTreeFileScan.get_next();
+                relHeapFile.deleteRecord(rid);
+                bTreeFile.Delete(key, rid);
+            }
+            bTreeFileScan.DestroyBTreeFileScan();
+            bTreeFile.close();
+        }
+
+        // Now do a full table scan and delete the records that are not in the index or vector Data type with index.
+        Scan scan = relHeapFile.openScan();
+
+        RID rid = new RID();
+        Tuple tuple = new Tuple();
+        short[] stringLengths = TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes);
+        tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
+
+        // Do a full table scan and delete the records that are not in the index or vector Data type with index.
+        while((tuple = scan.getNext(rid)) != null)
+        {
+            tuple.setHdr((short) attrTypes.length, attrTypes, stringLengths);
+            boolean match = matchRecordForDeletion(tuple, attrTypes, queryHashMap);
+            if (match)
+            {
+                relHeapFile.deleteRecord(rid);
+                for (int i = 0; i < LSHFIndexColumns.size(); i++)
+                {
+                    int columnId = LSHFIndexColumns.get(i);
+                    LSHFIndexList.get(i).deleteRecord(tuple.get100DVectFld(columnId), rid);
+                }
+            }
+        }
+        scan.closescan();
+    }
+
+    private static boolean matchRecordForDeletion(Tuple t, AttrType[] attrTypes, HashMap<Integer, HashMap<AttrType, ArrayList<String>>> queryMap) throws Exception{
+        for(int attrNo : queryMap.keySet()){
+            switch(attrTypes[attrNo - 1].attrType){
+                case AttrType.attrInteger:
+                    if(queryMap.get(attrNo).get(attrTypes[attrNo - 1]).contains(String.valueOf(t.getIntFld(attrNo)))){
+                        return true;
+                    }
+                    break;
+                case AttrType.attrString:
+                    if(queryMap.get(attrNo).get(attrTypes[attrNo - 1]).contains(t.getStrFld(attrNo))){
+                        return true;
+                    }
+                    break;
+                case AttrType.attrReal:
+                    if(queryMap.get(attrNo).get(attrTypes[attrNo - 1]).contains(String.valueOf(t.getFloFld(attrNo)))){
+                        return true;
+                    }
+                    break;
+                case AttrType.attrVector100D:
+                    if(queryMap.get(attrNo).get(attrTypes[attrNo - 1]).contains(t.get100DVectFld(attrNo).toString())){
+                        return true;
+                    }
+                    break;
+                default:
+                    throw new Error("Unsupported attribute type: " + attrTypes[attrNo - 1].attrType);
+            }
+        }
+        return false;
+    }
+
+    private static String handleDeleteQueryAttrValue(String inputString, AttrType attrType) {
+        if (attrType.attrType == AttrType.attrInteger)
+        {
+            return String.valueOf(Integer.parseInt(inputString));
+        }
+        else if (attrType.attrType == AttrType.attrReal)
+        {
+            return String.valueOf(Float.parseFloat(inputString));
+        }
+        else if (attrType.attrType == AttrType.attrVector100D)
+        {
+            Vector100Dtype v = Vector100Dtype.buildVector100Dtype(inputString.split("\\s+"));
+            return v.toString();
+        }
+        return inputString;
+        
+    }
+
     private static void populateBTreeIndexOnExistingRelColumn(BTreeFile bTreeFile, String relName, int columnId)
             throws
             Exception

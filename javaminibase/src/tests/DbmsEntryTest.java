@@ -63,6 +63,7 @@ public class DbmsEntryTest {
         testBatchInsert();
         testQueries();
         testDistanceJoin();
+        testBatchDelete();
 
         System.out.println("All tests passed!");
     }
@@ -868,6 +869,28 @@ public class DbmsEntryTest {
         System.out.println("PASS - testDistanceJoin\n\n");
     }
 
+    private static void testBatchDelete() throws Exception {
+        String dbNameOne = "testDb";
+        String sampleDataRelation = "relSample";
+
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt", sampleDataRelation });
+        if(new Heapfile(DbmsEntry.getRelDataFileName(sampleDataRelation)).getRecCnt() != 368)
+            throw new RuntimeException("FAIL - testBatchDelete - Invalid record counts after batch delete!");
+
+        DbmsEntry.handleBatchDeleteCommand(new String[] { SupportedCommands.BATCH_DELETE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/queryDataFiles/delete_1.txt", sampleDataRelation });
+        // First 4 rows in delete_1.txt belongs to row 1, 5th row belongs to row 2, 6th row belongs to row 3 in relation table.
+        // So, total 3 rows should be deleted.
+        if(new Heapfile(DbmsEntry.getRelDataFileName(sampleDataRelation)).getRecCnt() != 365)
+            throw new RuntimeException("FAIL - testBatchDelete - Invalid record counts after batch delete! " + new Heapfile(DbmsEntry.getRelDataFileName(sampleDataRelation)).getRecCnt());
+
+        DbmsEntry.handleDbCloseCommand();
+        System.out.println("PASS - testBatchDelete\n\n");
+    }
+    
     private static String getDbPath(String dbName) {
         return "/tmp/" + System.getProperty("user.name") + "." + dbName + "-db";
     }
