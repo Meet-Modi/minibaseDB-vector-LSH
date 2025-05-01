@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -64,6 +65,7 @@ public class DbmsEntryTest {
         testQueries();
         testDistanceJoin();
         testBatchDelete();
+        testQueriesWithLowBuffers();
 
         System.out.println("All tests passed!");
     }
@@ -508,7 +510,32 @@ public class DbmsEntryTest {
             }
         };
 
-        Function<Integer, Integer> verifyFilterOutput = (expectedKey) -> {
+        Consumer<int[]> verifyOutputTypes = (expectedAttrTypes) -> {
+            try {
+                BufferedReader fileReader = new BufferedReader(new FileReader(FILE_OUTPUT_STREAM_PATH));
+                String line = fileReader.readLine();
+                while((line != null) && (! line.contains("---Output Tuples---")))
+                    line = fileReader.readLine();
+                line = fileReader.readLine();
+                while(line.contains("Generated"))
+                    line = fileReader.readLine();
+
+                ArrayList<Integer> returnedAttrTypes = new ArrayList<>();
+                while(! line.isBlank()){
+                    returnedAttrTypes.add(getAttrTypeForString(line));
+                    line = fileReader.readLine();
+                }
+                fileReader.close();
+
+                if(! Arrays.equals(expectedAttrTypes, returnedAttrTypes.stream().mapToInt(s -> s).toArray()))
+                    throw new RuntimeException("FAIL - testQueries - Returned columns are not what was expected!");
+
+            } catch(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        Function<String, Integer> verifyFilterOutput = (expectedKey) -> {
             try {
                 BufferedReader fileReader = new BufferedReader(new FileReader(FILE_OUTPUT_STREAM_PATH));
                 String line = fileReader.readLine();
@@ -518,7 +545,7 @@ public class DbmsEntryTest {
                 line = fileReader.readLine();
                 int recordsSeen = 0;
                 while(! line.contains("---End Output---")) {
-                    if(line.trim().equals(String.valueOf(expectedKey))) {
+                    if(line.trim().equals(expectedKey)) {
                         recordsSeen++;
                     }
                     line = fileReader.readLine();
@@ -529,16 +556,16 @@ public class DbmsEntryTest {
             }
         };
 
-        testRangeQuery(relName, verifyRangeOutput, dbName);
-        testNnQuery(relName, verifyRangeOutput, dbName);
-        testSortQuery(relName, verifyRangeOutput);
-        testFilterQuery(relName, verifyFilterOutput, dbName);
+        testRangeQuery(relName, verifyRangeOutput, verifyOutputTypes, dbName);
+        testNnQuery(relName, verifyRangeOutput, verifyOutputTypes, dbName);
+        testSortQuery(relName, verifyRangeOutput, verifyOutputTypes);
+        testFilterQuery(relName, verifyFilterOutput, verifyOutputTypes, dbName);
 
         DbmsEntry.handleDbCloseCommand();
         System.out.println("PASS - testQueries\n\n");
     }
 
-    public static void testFilterQuery(String relationName, Function<Integer, Integer> verifyFilterOutput, String dbName) throws Exception {
+    public static void testFilterQuery(String relationName, Function<String, Integer> verifyFilterOutput, Consumer<int[]> verifyOutputTypes, String dbName) throws Exception {
         cleanupTestInputFiles();
 
         // Query on 100D column
@@ -551,18 +578,71 @@ public class DbmsEntryTest {
         createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 19, 10, Y, 1, 4)");
         DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
 
-        cleanupTestInputFiles();
+        final String[] indexSettings = new String[] {"Y", "N"};
 
         // With Integer index
         DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relationName, "1"});
 
-        OutputStream teeStream = buildTeeStream();
-        System.setOut(new PrintStream(teeStream, true));
-        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 19, 10, Y, 1, 4)");
-        DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
-        teeStream.close();
-        if(verifyFilterOutput.apply(19) == 0)
-            throw new RuntimeException("FAIL - testQueries - Filter query should return atleast 1 record!");
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
+
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(1, 19, 3, "+ indexOption +", 1, 4)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("19") != 3)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return exactly k records!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrInteger, AttrType.attrVector100D});
+        }
+
+        // With Float index
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relationName, "2"});
+
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
+
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(2, 23.06, 3, "+ indexOption +", 2, 3)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("23.06") != 3)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return exactly k records!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrReal, AttrType.attrString});
+        }
+
+        // With String index
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relationName, "3"});
+
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
+
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(3, VhtWsjJW, 1, "+ indexOption +", 2, 3)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("VhtWsjJW") != 1)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return exactly k records!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrReal, AttrType.attrString});
+        }
+
+        // *
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
+
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(1, 19, 10, "+ indexOption +", *)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("19") == 0)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return atleast 1 record!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrInteger, AttrType.attrReal, AttrType.attrString, AttrType.attrVector100D});
+        }
+
+        cleanupTestInputFiles();
 
         // Low numbuf
         boolean wasExceptionRaised = false;
@@ -578,23 +658,21 @@ public class DbmsEntryTest {
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbName });
 
         // Positive case to ensure DB not corrupt - Remove once below methods are done
-        teeStream = buildTeeStream();
-        System.setOut(new PrintStream(teeStream, true));
-        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 19, 10, Y, 1, 4)");
-        DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
-        teeStream.close();
-        if(verifyFilterOutput.apply(19) == 0)
-            throw new RuntimeException("FAIL - testQueries - Filter query should return atleast 1 record!");
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
 
-        // TODO Vikram - test real index once implemented
-
-        // TODO Vikram - test string index once implemented
-
-        // TODO Vikram - test no index once implemented
-
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(1, 19, 3, "+ indexOption +", 1, 4)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("19") != 3)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return exactly k records!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrInteger, AttrType.attrVector100D});
+        }
     }
 
-    private static void testSortQuery(String relationName, Function<Integer, Integer> verifyResults) throws Exception {
+    private static void testSortQuery(String relationName, Function<Integer, Integer> verifyResults, Consumer<int[]> verifyOutputTypes) throws Exception {
         cleanupTestInputFiles();
 
         OutputStream teeStream = buildTeeStream();
@@ -603,9 +681,21 @@ public class DbmsEntryTest {
         DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
         teeStream.close();
         verifyResults.apply(Integer.MAX_VALUE);
+        verifyOutputTypes.accept(new int[]{ AttrType.attrReal, AttrType.attrVector100D });
+
+        cleanupTestInputFiles();
+        teeStream = buildTeeStream();
+
+        // *
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Sort(4, " + TARGET_VECTOR_FILE_PATH + ", 70000, *)");
+        System.setOut(new PrintStream(teeStream, true));
+        DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+        teeStream.close();
+        verifyResults.apply(Integer.MAX_VALUE);
+        verifyOutputTypes.accept(new int[]{ AttrType.attrInteger, AttrType.attrReal, AttrType.attrString, AttrType.attrVector100D });
     }
 
-    private static void testRangeQuery(String relationName, Function<Integer, Integer> verifyResults, String dbName) throws Exception {
+    private static void testRangeQuery(String relationName, Function<Integer, Integer> verifyResults, Consumer<int[]> verifyOutputTypes, String dbName) throws Exception {
         cleanupTestInputFiles();
 
         // No Index
@@ -615,6 +705,7 @@ public class DbmsEntryTest {
         DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
         teeStream.close();
         verifyResults.apply(70000);
+        verifyOutputTypes.accept(new int[]{ AttrType.attrInteger, AttrType.attrReal, AttrType.attrString, AttrType.attrVector100D });
 
         cleanupTestInputFiles();
         teeStream = buildTeeStream();
@@ -626,6 +717,18 @@ public class DbmsEntryTest {
         DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
         teeStream.close();
         verifyResults.apply(70000);
+        verifyOutputTypes.accept(new int[]{ AttrType.attrInteger, AttrType.attrString, AttrType.attrVector100D });
+
+        cleanupTestInputFiles();
+        teeStream = buildTeeStream();
+
+        // *
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Range(4, " + TARGET_VECTOR_FILE_PATH + ", 70000, N, *)");
+        System.setOut(new PrintStream(teeStream, true));
+        DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+        teeStream.close();
+        verifyResults.apply(70000);
+        verifyOutputTypes.accept(new int[]{ AttrType.attrInteger, AttrType.attrReal, AttrType.attrString, AttrType.attrVector100D });
 
         cleanupTestInputFiles();
 
@@ -644,7 +747,7 @@ public class DbmsEntryTest {
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbName });
     }
 
-    public static void testNnQuery(String relationName, Function<Integer, Integer> verifyResults, String dbName) throws Exception {
+    public static void testNnQuery(String relationName, Function<Integer, Integer> verifyResults, Consumer<int[]> verifyOutputTypes, String dbName) throws Exception {
         cleanupTestInputFiles();
 
         // No Index
@@ -655,6 +758,7 @@ public class DbmsEntryTest {
         teeStream.close();
         if(verifyResults.apply(Integer.MAX_VALUE) != 5)
             throw new RuntimeException("FAIL - testQueries - NN query should contain 5 results!");
+        verifyOutputTypes.accept(new int[]{ AttrType.attrString, AttrType.attrVector100D });
 
         cleanupTestInputFiles();
         teeStream = buildTeeStream();
@@ -667,6 +771,19 @@ public class DbmsEntryTest {
         teeStream.close();
         if(verifyResults.apply(Integer.MAX_VALUE) != 5)
             throw new RuntimeException("FAIL - testQueries - NN query should contain 5 results!");
+        verifyOutputTypes.accept(new int[]{ AttrType.attrInteger, AttrType.attrVector100D });
+
+        cleanupTestInputFiles();
+        teeStream = buildTeeStream();
+
+        // *
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"NN(4, " + TARGET_VECTOR_FILE_PATH + ", 5, N, *)");
+        System.setOut(new PrintStream(teeStream, true));
+        DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+        teeStream.close();
+        if(verifyResults.apply(Integer.MAX_VALUE) != 5)
+            throw new RuntimeException("FAIL - testQueries - NN query should contain 5 results!");
+        verifyOutputTypes.accept(new int[]{ AttrType.attrInteger, AttrType.attrReal, AttrType.attrString, AttrType.attrVector100D });
 
         cleanupTestInputFiles();
 
@@ -762,7 +879,7 @@ public class DbmsEntryTest {
         // Invalid rel2 Name
         createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
                 "RANGE(2, "+ TARGET_VECTOR_FILE_PATH +", 70000, Y, 1, 2),\n" +
-                "2, 50000, Y");
+                "2, 50000, Y, 1, 2");
         DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), outerRelation, "invalidRelName", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
 
         // No index on rel2 column
@@ -772,7 +889,7 @@ public class DbmsEntryTest {
         cleanupTestInputFiles();
         createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
                 "RANGE(2, "+ TARGET_VECTOR_FILE_PATH +", 70000, Y, 1, 2),\n" +
-                "1, 50000, Y");
+                "1, 50000, Y, 1, 2");
         DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), outerRelation, innerRelation, QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
 
         DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), outerRelation, "2", "2", "2"});
@@ -816,6 +933,37 @@ public class DbmsEntryTest {
             }
         };
 
+        BiConsumer<int[], int[]> verifyOutputAttrTypes = (expectedAttrTypesOuter, expectedAttrTypesInner) -> {
+            try {
+                BufferedReader fileReader = new BufferedReader(new FileReader(FILE_OUTPUT_STREAM_PATH));
+                String line = fileReader.readLine();
+                while((line != null) && (! line.contains("-------------Outer Relation-------------")))
+                    line = fileReader.readLine();
+                line = fileReader.readLine();
+
+                ArrayList<Integer> outerAttrTypes = new ArrayList<>();
+                while(! line.contains("-------------Inner Relation-------------")){
+                    outerAttrTypes.add(getAttrTypeForString(line));
+                    line = fileReader.readLine();
+                }
+                if(! Arrays.equals(expectedAttrTypesOuter, outerAttrTypes.stream().mapToInt(s -> s).toArray()))
+                    throw new RuntimeException("FAIL - testDistanceJoin - Returned columns are not what was expected!");
+                line = fileReader.readLine();
+
+                ArrayList<Integer> innerAttrTypes = new ArrayList<>();
+                while(! line.contains("----------------------------------------")){
+                    innerAttrTypes.add(getAttrTypeForString(line));
+                    line = fileReader.readLine();
+                }
+                if(! Arrays.equals(expectedAttrTypesInner, innerAttrTypes.stream().mapToInt(s -> s).toArray()))
+                    throw new RuntimeException("FAIL - testDistanceJoin - Returned columns are not what was expected!");
+
+                fileReader.close();
+              } catch (Exception e) {
+                  throw new RuntimeException(e);
+              }
+        };
+
         // Randomly picked a vector from sample_data_1
         String outerTargetVectorString = "28 29 68 45 29 97 82 42 98 97 14 38 64 42 9 12 23 59 3 30 33 27 30 83 52 73 16 68 35 18 35 75 47 91 61 78 44 38 79 56 87 44 32 64 77 75 72 31 32 76 81 59 94 2 27 48 13 7 56 89 18 81 43 1 21 75 78 31 46 4 1 69 55 20 22 69 62 10 49 92 15 40 37 25 86 50 56 2 42 80 43 16 57 62 51 93 39 97 58 68";
         createFileForTestInput(TARGET_VECTOR_FILE_PATH, outerTargetVectorString);
@@ -835,6 +983,7 @@ public class DbmsEntryTest {
             DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), outerRelation, innerRelation, QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
             teeStream.close();
             verifyDJoinResult.apply(outerTargetVector, 400);
+            verifyOutputAttrTypes.accept(new int[] { AttrType.attrReal, AttrType.attrVector100D}, new int[] { AttrType.attrReal, AttrType.attrVector100D});
         }
 
         // Low numBuf query
@@ -863,7 +1012,19 @@ public class DbmsEntryTest {
             teeStream.close();
             if(verifyDJoinResult.apply(outerTargetVector, 400) != 2)
                 throw new RuntimeException("FAIL - testDistanceJoin - More than k tuples returned by outer NN scan!");
+            verifyOutputAttrTypes.accept(new int[] { AttrType.attrReal, AttrType.attrVector100D}, new int[] { AttrType.attrReal, AttrType.attrVector100D});
         }
+
+        // *
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
+                "NN(2, "+ TARGET_VECTOR_FILE_PATH +", 2, N, *),\n" +
+                "2, 400, N, *");
+        OutputStream teeStream = buildTeeStream();
+        System.setOut(new PrintStream(teeStream, true));
+        DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), outerRelation, innerRelation, QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+        teeStream.close();
+        verifyOutputAttrTypes.accept(new int[] { AttrType.attrReal, AttrType.attrVector100D, AttrType.attrReal, AttrType.attrVector100D}, new int[] { AttrType.attrReal, AttrType.attrVector100D, AttrType.attrReal, AttrType.attrVector100D});
 
         DbmsEntry.handleDbCloseCommand();
         System.out.println("PASS - testDistanceJoin\n\n");
@@ -891,6 +1052,119 @@ public class DbmsEntryTest {
         System.out.println("PASS - testBatchDelete\n\n");
     }
     
+    private static void testQueriesWithLowBuffers() throws Exception {
+        String dbNameOne = "testDb";
+        String relNameOne = "rel1";
+        String relNameTwo = "rel2";
+
+        Files.deleteIfExists(Paths.get(getDbPath(dbNameOne)));
+        createFileForTestInput(TARGET_VECTOR_FILE_PATH, TARGET_VECTOR);
+
+        DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbNameOne });
+
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample10_000.txt", relNameOne });
+        DbmsEntry.handleBatchCreateCommand(new String[] { SupportedCommands.BATCH_CREATE.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt", relNameTwo });
+
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relNameOne, "1", "2", "2"});
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relNameTwo, "2", "2", "2"});
+
+        final int[] numBuf = new int[] {1};
+        BiConsumer<Callable<Void>, int[]> runWithNumBuf = (test, numBufs) -> {
+            // Queries that should fail due to low numBuf
+            for(int i : numBufs) {
+                numBuf[0] = i;
+                try {
+                    test.call();
+                } catch (Exception e) {
+                    try {
+                        DbmsEntry.handleDbCloseCommand();
+                        DbmsEntry.handleDbOpenCommand(new String[]{SupportedCommands.OPEN_DB.getCommand(), dbNameOne});
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                    continue;
+                }
+                throw new RuntimeException("FAIL - lowBufferTests - Exception expected due to low numBuf but none thrown!");
+            }
+
+            // A query with high numBuf should pass after failed queries
+            numBuf[0] = DbmsEntry.DB_SIZE_IN_PAGES;
+            try {
+                test.call();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        // Range
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Range(4, " + TARGET_VECTOR_FILE_PATH + ", 70000, N, 1, 2, 3, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        // NN
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"NN(4, " + TARGET_VECTOR_FILE_PATH + ", 5, N, 1, 2, 3, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        // Sort
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Sort(4, " + TARGET_VECTOR_FILE_PATH + ", 70000, 1, 2, 3, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        // Filter
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 5, 10, Y, 2, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1});
+
+        // DJoin
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
+                "NN(4, "+ TARGET_VECTOR_FILE_PATH +", 1, N, 1, 2),\n" +
+                "2, 55000, Y, 1, 2");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, relNameTwo, QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+
+        // Add more records to relations
+        DbmsEntry.handleBatchInsertCommand(new String[] { SupportedCommands.BATCH_INSERT.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample10_000.txt", relNameOne });
+        DbmsEntry.handleBatchInsertCommand(new String[] { SupportedCommands.BATCH_INSERT.getCommand(), "javaminibase/src/tests/scriptTestDataFiles/sample_data_1.txt", relNameTwo });
+
+        // Tests should still work. Test some.
+        // NN
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"NN(4, " + TARGET_VECTOR_FILE_PATH + ", 5, N, 1, 2, 3, 4)");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        // DJoin
+        cleanupTestInputFiles();
+        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"DJOIN(\n" +
+                "NN(4, "+ TARGET_VECTOR_FILE_PATH +", 1, N, 1, 2),\n" +
+                "2, 55000, Y, 1, 2");
+        runWithNumBuf.accept(() -> {
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relNameOne, relNameTwo, QUERY_SPECIFICATION_FILE_PATH, String.valueOf(numBuf[0])});
+            return null;
+        }, new int[] {1, 100});
+
+        DbmsEntry.handleDbCloseCommand();
+        System.out.println("PASS - testQueriesWithLowBuffers\n\n");
+    }
+
     private static String getDbPath(String dbName) {
         return "/tmp/" + System.getProperty("user.name") + "." + dbName + "-db";
     }
@@ -990,4 +1264,14 @@ public class DbmsEntryTest {
             throw new RuntimeException("FAIL - Record count mismatch between LSHFIndex and data heap file!");
     }
 
+    private static int getAttrTypeForString(String input) {
+        if(input.contains("["))
+            return AttrType.attrVector100D;
+        else if(input.contains("."))
+            return AttrType.attrReal;
+        else if(input.matches("[a-zA-Z]+"))
+            return AttrType.attrString;
+        else
+            return AttrType.attrInteger;
+    }
 }
