@@ -25,40 +25,7 @@ public class Query
     public static short[] strLengths;
     private static int[] outputFieldNumbers;
     private static Iterator scan;
-    private static AttrType[] outputTupleAttrTypes;
     public static int numBuffersForSort;
-
-    private static void printOutputTuple(Tuple outTuple) throws
-                                                         Exception
-    {
-        System.out.println();
-
-        for (int i = 0; i < outputTupleAttrTypes.length; i++)
-        {
-            switch (outputTupleAttrTypes[i].attrType)
-            {
-                case AttrType.attrInteger:
-                    System.out.println("" + outTuple.getIntFld(i + 1));
-                    break;
-                case AttrType.attrString:
-                    System.out.println(outTuple.getStrFld(i + 1));
-                    break;
-                case AttrType.attrReal:
-                    System.out.println("" + outTuple.getFloFld(i + 1));
-                    break;
-                case AttrType.attrVector100D:
-                    System.out.println(outTuple.get100DVectFld(i + 1));
-                    break;
-            }
-        }
-    }
-
-    private static void prepareOutputTupleAttrTypes()
-    {
-        ArrayList<AttrType> attrTypesList = new ArrayList<>();
-        Arrays.stream(outputFieldNumbers).forEach(outNum -> attrTypesList.add(attrTypes[outNum - 1]));
-        outputTupleAttrTypes = attrTypesList.toArray(new AttrType[0]);
-    }
 
     public static Vector100Dtype read_target_vector(String target_vector_file_name) throws
                                                                                     Exception
@@ -178,14 +145,13 @@ public class Query
         System.out.println("\n ---Output Tuples---");
 
 //        Iterate over scan
-        prepareOutputTupleAttrTypes();
-
         try
         {
             Tuple t = scan.get_next();
             while (t != null)
             {
                 TupleUtils.printFieldsFromTuple(t, attrTypes, outputFieldNumbers);
+                System.out.println();
                 t = scan.get_next();
             }
         }
@@ -225,6 +191,7 @@ public class Query
         if (parameters[4].trim().equals("*"))
         {
             outputFieldNumbers = new int[attrTypes.length];
+            IntStream.range(0, attrTypes.length).forEach(i -> outputFieldNumbers[i] = i + 1);
         }
         else
         {
