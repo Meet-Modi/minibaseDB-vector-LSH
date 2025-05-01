@@ -534,7 +534,7 @@ public class DbmsEntryTest {
             }
         };
 
-        Function<Integer, Integer> verifyFilterOutput = (expectedKey) -> {
+        Function<String, Integer> verifyFilterOutput = (expectedKey) -> {
             try {
                 BufferedReader fileReader = new BufferedReader(new FileReader(FILE_OUTPUT_STREAM_PATH));
                 String line = fileReader.readLine();
@@ -544,7 +544,7 @@ public class DbmsEntryTest {
                 line = fileReader.readLine();
                 int recordsSeen = 0;
                 while(! line.contains("---End Output---")) {
-                    if(line.trim().equals(String.valueOf(expectedKey))) {
+                    if(line.trim().equals(expectedKey)) {
                         recordsSeen++;
                     }
                     line = fileReader.readLine();
@@ -564,7 +564,7 @@ public class DbmsEntryTest {
         System.out.println("PASS - testQueries\n\n");
     }
 
-    public static void testFilterQuery(String relationName, Function<Integer, Integer> verifyFilterOutput, Consumer<int[]> verifyOutputTypes, String dbName) throws Exception {
+    public static void testFilterQuery(String relationName, Function<String, Integer> verifyFilterOutput, Consumer<int[]> verifyOutputTypes, String dbName) throws Exception {
         cleanupTestInputFiles();
 
         // Query on 100D column
@@ -577,31 +577,69 @@ public class DbmsEntryTest {
         createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 19, 10, Y, 1, 4)");
         DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
 
-        cleanupTestInputFiles();
+        final String[] indexSettings = new String[] {"Y", "N"};
 
         // With Integer index
         DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relationName, "1"});
 
-        OutputStream teeStream = buildTeeStream();
-        System.setOut(new PrintStream(teeStream, true));
-        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 19, 10, Y, 1, 4)");
-        DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
-        teeStream.close();
-        if(verifyFilterOutput.apply(19) == 0)
-            throw new RuntimeException("FAIL - testQueries - Filter query should return atleast 1 record!");
-        verifyOutputTypes.accept(new int[]{ AttrType.attrInteger, AttrType.attrVector100D });
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
 
-        cleanupTestInputFiles();
-        teeStream = buildTeeStream();
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(1, 19, 3, "+ indexOption +", 1, 4)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("19") != 3)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return exactly k records!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrInteger, AttrType.attrVector100D});
+        }
+
+        // With Float index
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relationName, "2"});
+
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
+
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(2, 23.06, 3, "+ indexOption +", 2, 3)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("23.06") != 3)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return exactly k records!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrReal, AttrType.attrString});
+        }
+
+        // With String index
+        DbmsEntry.handleIndexCreateCommand(new String[] { SupportedCommands.CREATE_INDEX.getCommand(), relationName, "3"});
+
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
+
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(3, VhtWsjJW, 1, "+ indexOption +", 2, 3)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("VhtWsjJW") != 1)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return exactly k records!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrReal, AttrType.attrString});
+        }
 
         // *
-        System.setOut(new PrintStream(teeStream, true));
-        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 19, 10, Y, *)");
-        DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
-        teeStream.close();
-        if(verifyFilterOutput.apply(19) == 0)
-            throw new RuntimeException("FAIL - testQueries - Filter query should return atleast 1 record!");
-        verifyOutputTypes.accept(new int[]{ AttrType.attrInteger, AttrType.attrReal, AttrType.attrString, AttrType.attrVector100D });
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
+
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(1, 19, 10, "+ indexOption +", *)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("19") == 0)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return atleast 1 record!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrInteger, AttrType.attrReal, AttrType.attrString, AttrType.attrVector100D});
+        }
 
         cleanupTestInputFiles();
 
@@ -619,20 +657,18 @@ public class DbmsEntryTest {
         DbmsEntry.handleDbOpenCommand(new String[] { SupportedCommands.OPEN_DB.getCommand(), dbName });
 
         // Positive case to ensure DB not corrupt - Remove once below methods are done
-        teeStream = buildTeeStream();
-        System.setOut(new PrintStream(teeStream, true));
-        createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH,"Filter(1, 19, 10, Y, 1, 4)");
-        DbmsEntry.handleQueryCommand(new String[] { SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
-        teeStream.close();
-        if(verifyFilterOutput.apply(19) == 0)
-            throw new RuntimeException("FAIL - testQueries - Filter query should return atleast 1 record!");
+        for(String indexOption : indexSettings) {
+            cleanupTestInputFiles();
 
-        // TODO Vikram - test real index once implemented
-
-        // TODO Vikram - test string index once implemented
-
-        // TODO Vikram - test no index once implemented
-
+            OutputStream teeStream = buildTeeStream();
+            System.setOut(new PrintStream(teeStream, true));
+            createFileForTestInput(QUERY_SPECIFICATION_FILE_PATH, "Filter(1, 19, 3, "+ indexOption +", 1, 4)");
+            DbmsEntry.handleQueryCommand(new String[]{SupportedCommands.QUERY.getCommand(), relationName, "rel2NotUsed", QUERY_SPECIFICATION_FILE_PATH, String.valueOf(DbmsEntry.DB_SIZE_IN_PAGES)});
+            teeStream.close();
+            if (verifyFilterOutput.apply("19") != 3)
+                throw new RuntimeException("FAIL - testQueries - Filter query should return exactly k records!");
+            verifyOutputTypes.accept(new int[]{AttrType.attrInteger, AttrType.attrVector100D});
+        }
     }
 
     private static void testSortQuery(String relationName, Function<Integer, Integer> verifyResults, Consumer<int[]> verifyOutputTypes) throws Exception {

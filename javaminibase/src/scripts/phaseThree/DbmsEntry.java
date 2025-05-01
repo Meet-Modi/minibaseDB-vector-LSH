@@ -609,35 +609,6 @@ public class DbmsEntry
             }
             else
             {
-
-                // Define the filter expression for filescan
-                CondExpr[] filter = new CondExpr[1];
-                filter[0] = new CondExpr();
-                filter[0].op = new AttrOperator(AttrOperator.aopEQ);
-                filter[0].type1 = new AttrType(AttrType.attrSymbol);
-                filter[0].type2 = new AttrType(AttrType.attrString);
-                filter[0].operand1.symbol = new FldSpec(new RelSpec(RelSpec.outer), non_vector_field_number);
-
-                // Identify operand2(Target value) fieldType
-                if (filterFieldType.attrType == AttrType.attrInteger)
-                {
-                    filter[0].operand2.integer = Integer.parseInt(target_value);
-                }
-                else if (filterFieldType.attrType == AttrType.attrString)
-                {
-                    filter[0].operand2.string = target_value;
-                }
-                else if (filterFieldType.attrType == AttrType.attrReal)
-                {
-                    filter[0].operand2.real =Float.parseFloat(target_value);
-                }
-                else
-                {
-                    System.out.println("Unsupported filter field type: " + filterFieldType.attrType);
-                    return;
-                }
-                filter[0].next = null;
-
                 // Define projList
                 FldSpec[] projList = new FldSpec[attrTypes.length];
                 IntStream.range(0, attrTypes.length).forEach(i -> projList[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1));
@@ -647,22 +618,35 @@ public class DbmsEntry
                         getRelDataFileName(rel1Name),
                         attrTypes,
                         TupleUtils.getStrFieldLengthsForConstantStrSizes(attrTypes),
-                        (short) attrTypes.length, outputFieldNumbers.length,
+                        (short) attrTypes.length, attrTypes.length,
                         projList,
-                        filter
+                        null
                 );
 
-                Tuple t = scan.get_next();
-                int iterator = 0;
-                System.out.println("\n ---Output Tuples---");
-                while (t != null && iterator < k_value)
-                {
-                    TupleUtils.printFieldsFromTuple(t, attrTypes, outputFieldNumbers);
-                    System.out.println();
-                    t = scan.get_next();
-                    iterator++;
+                try {
+                    Tuple t = scan.get_next();
+                    int iterator = 0;
+                    System.out.println("\n ---Output Tuples---");
+                    while (t != null && iterator < k_value) {
+                        String tupleReturnedValue = "";
+                        if(filterFieldType.attrType == AttrType.attrInteger)
+                            tupleReturnedValue = String.valueOf(t.getIntFld(non_vector_field_number));
+                        else if(filterFieldType.attrType == AttrType.attrString)
+                            tupleReturnedValue = t.getStrFld(non_vector_field_number);
+                        else if(filterFieldType.attrType == AttrType.attrReal)
+                            tupleReturnedValue = String.valueOf(t.getFloFld(non_vector_field_number));
+
+                        if(target_value.equals(tupleReturnedValue)) {
+                            TupleUtils.printFieldsFromTuple(t, attrTypes, outputFieldNumbers);
+                            System.out.println();
+                            iterator++;
+                        }
+                        t = scan.get_next();
+                    }
+                    System.out.println("\n ---End Output---");
+                } finally {
+                    scan.close();
                 }
-                scan.close();
             }
         }
         else if (querySpecification.startsWith("DJOIN("))
