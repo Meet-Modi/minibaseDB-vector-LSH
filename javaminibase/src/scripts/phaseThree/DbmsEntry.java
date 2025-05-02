@@ -104,6 +104,10 @@ public class DbmsEntry
                 {
                     handleQueryCommand(commandParts);
                 }
+                else if (commandParts[0].equals(SupportedCommands.BATCH_DELETE.getCommand()))
+                {
+                    handleBatchDeleteCommand(commandParts);
+                }
                 else
                 {
                     System.out.println("Unrecognized command. Quitting...");
@@ -1289,6 +1293,7 @@ public class DbmsEntry
                 tupleValue = br.readLine();
                 if (tupleValue == null)
                 {
+                    System.out.println("Incomplete tuple in data file. Ignoring it...");
                     endOfFile = true;
                     break;
                 }
